@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="data:,">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PortalPanel Studio</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #111111; 
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #DDDDDD;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* TOP HEADER BAR */
+        .app-header {
+            width: 100%;
+            height: 55px;
+            background-color: #181818;
+            border-bottom: 2px solid #222;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 25px;
+            box-sizing: border-box;
+            z-index: 1002;
+        }
+
+        .header-logo {
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        .logo-white { color: #FFFFFF; }
+        .logo-cyan { color: #00FFFF; }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #00FF00;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #00FF00;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #00FF00;
+        }
+
+        /* MAIN WORKSPACE Layout */
+        .app-workspace {
+            display: flex;
+            flex-grow: 1;
+            width: 100%;
+            height: calc(100% - 55px);
+        }
+
+        /* LEFT SIDEBAR */
+        .sidebar {
+            width: 320px;
+            height: 100%;
+            background-color: #181818;
+            border-right: 2px solid #222;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sidebar-section-title {
+            color: #555555;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 5px;
+        }
+
+        .panel-btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 13px;
+            font-weight: bold;
+            background-color: #222222;
+            color: #FFFFFF;
+            border: 1px solid #00FFFF;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-btn:hover {
+            background-color: rgba(0, 255, 255, 0.1);
+            color: #00FFFF;
+        }
+        .panel-btn.active {
+            background-color: rgba(0, 255, 255, 0.15);
+            border-color: #00FFFF;
+            color: #00FFFF;
+        }
+
+        .help-box {
+            background-color: #222;
+            border-radius: 6px;
+            padding: 15px;
+            font-size: 12.5px;
+            line-height: 1.4;
+            color: #AAAAAA;
+            border-left: 3px solid #00FFFF;
+        }
+
+        /* RIGHT CANVAS DISPLAY AREA */
+        .canvas-area {
+            flex-grow: 1;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #111111;
+            position: relative;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* THE LIVE VIEWPORT CONTAINERS */
+        /* Raw mode displays the full 1920x1080 canvas */
+        .viewport-raw {
+            width: 100%;
+            max-width: 1000px;
+            aspect-ratio: 16 / 9;
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #000;
+            display: block;
+        }
+        .viewport-raw img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Cropped mode uses container-clipping to isolate parts of the stream */
+        .viewport-cropped {
+            width: 500px;
+            height: 480px;
+            border: 3px solid #00FFFF;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            background-color: #000;
+            display: none; /* Controlled via Javascript */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* 
+           Crucial CSS Clip Mapping:
+           Our raw stream is 1920x1080.
+           To isolate the PFD or MFD, we scale and shift the single stream <img> 
+           relative to the 500x480 crop container using hardware-accelerated transforms.
+        */
+        .viewport-cropped img {
+            position: absolute;
+            width: 1116px; /* Scales 1920px proportionally */
+            height: 628px; /* Scales 1080px proportionally */
+            max-width: none;
+        }
+
+        /* Coordinates to align Left PFD panel inside our crop window */
+        .crop-pfd img {
+            left: -29px;   /* Shifts X axis left */
+            top: -81px;   /* Shifts Y axis up */
+        }
+
+        /* Coordinates to align Right MFD panel inside our crop window */
+        .crop-mfd img {
+            left: -587px;  /* Shifts X axis left to display the MFD */
+            top: -81px;   /* Shifts Y axis up */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOP HEADER -->
+    <div class="app-header">
+        <div class="header-logo">
+            <span class="logo-white">PORTAL</span><span class="logo-cyan">PANEL</span>
+        </div>
+        <div class="header-status">
+            <span class="status-dot"></span>
+            <span>MOCK ENGINE ONLINE (25 FPS)</span>
+        </div>
+    </div>
+
+    <!-- MAIN APP WORKSPACE -->
+    <div class="app-workspace">
+
+        <!-- LEFT SIDEBAR CONTROLS -->
+        <div class="sidebar">
+            
+            <div>
+                <div class="sidebar-section-title">Texture Capture Feed</div>
+                <p style="font-size: 12px; color: #888; margin-top: 5px; margin-bottom: 15px; line-height: 1.3;">
+                    PortalPanel captures the simulator's raw drawing target in real-time. Select a view to isolate gauges.
+                </p>
+                
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button class="panel-btn active" id="btn-view-raw">
+                        <span>Full Texture Sheet</span>
+                        <span style="color: #555; font-size: 11px;">1920x1080</span>
+                    </button>
+                    <button class="panel-btn" id="btn-view-pfd">
+                        <span>PFD Display (Left)</span>
+                        <span style="color: #00FFFF; font-size: 11px;">Cropped</span>
+                    </button>
+                    <button class="panel-btn" id="btn-view-mfd">
+                        <span>MFD / Map Display (Right)</span>
+                        <span style="color: #00FFFF; font-size: 11px;">Cropped</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="help-box">
+                <strong style="color: #FFF; font-size: 13px; display: block; margin-bottom: 5px;">How It Works:</strong>
+                Instead of popping out windows, PortalPanel reads raw textures. These WebSockets can be loaded inside Air Manager bezels or standard tablet browsers, with 0% impact on simulator performance.
+            </div>
+
+        </div>
+
+        <!-- RIGHT DISPLAY CANVAS -->
+        <div class="canvas-area">
+            
+            <!-- VIEW 1: FULL UN-CROPPED STREAM SHEET -->
+            <div class="viewport-raw" id="view-raw-container">
+                <img src="/stream/raw" alt="Live Raw Texture Feed">
+            </div>
+
+            <!-- VIEW 2: CROPPED PFD VIEWPORT -->
+            <div class="viewport-cropped crop-pfd" id="view-pfd-container">
+                <img src="/stream/raw" alt="Cropped PFD Feed">
+            </div>
+
+            <!-- VIEW 3: CROPPED MFD VIEWPORT -->
+            <div class="viewport-cropped crop-mfd" id="view-mfd-container">
+                <img src="/stream/raw" alt="Cropped MFD Feed">
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- FRONTEND ROUTING CONTROL -->
+    <script>
+        const btnViewRaw = document.getElementById('btn-view-raw');
+        const btnViewPfd = document.getElementById('btn-view-pfd');
+        const btnViewMfd = document.getElementById('btn-view-mfd');
+
+        const viewRawContainer = document.getElementById('view-raw-container');
+        const viewPfdContainer = document.getElementById('view-pfd-container');
+        const viewMfdContainer = document.getElementById('view-mfd-container');
+
+        // Handles switching between viewports in the interface
+        function selectActiveViewport(target) {
+            // Reset active states on buttons
+            document.querySelectorAll('.panel-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Hide all viewport containers
+            viewRawContainer.style.display = 'none';
+            viewPfdContainer.style.display = 'none';
+            viewMfdContainer.style.display = 'none';
+
+            if (target === 'raw') {
+                btnViewRaw.classList.add('active');
+                viewRawContainer.style.display = 'block';
+            } else if (target === 'pfd') {
+                btnViewPfd.classList.add('active');
+                viewPfdContainer.style.display = 'block';
+            } else if (target === 'mfd') {
+                btnViewMfd.classList.add('active');
+                viewMfdContainer.style.display = 'block';
+            }
+        }
+
+        // Attach Click Listeners to Sidebar Options
+        btnViewRaw.addEventListener('click', () => selectActiveViewport('raw'));
+        btnViewPfd.addEventListener('click', () => selectActiveViewport('pfd'));
+        btnViewMfd.addEventListener('click', () => selectActiveViewport('mfd'));
+    </script>
+</body>
+</html>
