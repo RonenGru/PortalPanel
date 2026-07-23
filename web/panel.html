@@ -17,6 +17,7 @@
             color: #DDDDDD;
             display: flex;
             flex-direction: column;
+            user-select: none;
         }
 
         /* TOP HEADER BAR */
@@ -71,11 +72,17 @@
             height: 100%;
             background-color: #181818;
             border-right: 2px solid #222;
-            padding: 20px;
-            box-sizing: border-box;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            box-sizing: border-box;
+            z-index: 1001;
+        }
+
+        .sidebar-scroll {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
         }
 
         .sidebar-section-title {
@@ -84,10 +91,101 @@
             font-weight: bold;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 5px;
+            margin-bottom: 10px;
+            margin-top: 20px;
+        }
+
+        /* Input design */
+        .select-input {
+            width: 100%;
+            padding: 10px;
+            background-color: #222;
+            color: #FFF;
+            border: 1px solid #333;
+            border-radius: 6px;
+            outline: none;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .select-input:focus {
+            border-color: #00FFFF;
         }
 
         .panel-btn {
+            width: 100%;
+            padding: 12px;
+            font-size: 13px;
+            font-weight: bold;
+            background-color: #222222;
+            color: #FFFFFF;
+            border: 1px solid #333;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .panel-btn:hover {
+            background-color: rgba(0, 255, 255, 0.05);
+            color: #00FFFF;
+            border-color: #00FFFF;
+        }
+        .panel-btn.active {
+            background-color: rgba(0, 255, 255, 0.1);
+            border-color: #00FFFF;
+            color: #00FFFF;
+        }
+
+        /* Coordinates Panel Container */
+        .coords-panel {
+            background-color: #222;
+            border-radius: 6px;
+            padding: 15px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .coords-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+        }
+        .coord-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .coord-field span {
+            color: #666;
+            font-size: 10px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .coord-input {
+            width: 100%;
+            padding: 6px;
+            background-color: #111;
+            color: #FFF;
+            border: 1px solid #444;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 12px;
+            box-sizing: border-box;
+            outline: none;
+        }
+        .coord-input:focus {
+            border-color: #00FFFF;
+        }
+
+        .sidebar-btn-main {
             width: 100%;
             padding: 12px;
             font-size: 13px;
@@ -98,32 +196,14 @@
             border-radius: 6px;
             cursor: pointer;
             transition: all 0.2s ease;
-            text-align: left;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            text-align: center;
         }
-        .panel-btn:hover {
-            background-color: rgba(0, 255, 255, 0.1);
-            color: #00FFFF;
-        }
-        .panel-btn.active {
-            background-color: rgba(0, 255, 255, 0.15);
-            border-color: #00FFFF;
-            color: #00FFFF;
+        .sidebar-btn-main:hover {
+            background-color: #00FFFF;
+            color: #000;
         }
 
-        .help-box {
-            background-color: #222;
-            border-radius: 6px;
-            padding: 15px;
-            font-size: 12.5px;
-            line-height: 1.4;
-            color: #AAAAAA;
-            border-left: 3px solid #00FFFF;
-        }
-
-        /* RIGHT CANVAS DISPLAY AREA */
+        /* RIGHT DISPLAY CANVAS AREA */
         .canvas-area {
             flex-grow: 1;
             height: 100%;
@@ -136,8 +216,7 @@
             box-sizing: border-box;
         }
 
-        /* THE LIVE VIEWPORT CONTAINERS */
-        /* Raw mode displays the full 1920x1080 canvas */
+        /* RAW MODE VIEWER */
         .viewport-raw {
             width: 100%;
             max-width: 1000px;
@@ -154,42 +233,28 @@
             object-fit: contain;
         }
 
-        /* Cropped mode uses container-clipping to isolate parts of the stream */
+        /* 
+           SERVER-SIDE CROPPED VIEWERS:
+           Since the cropping is done in-memory on the Python side,
+           no complex scaling or offsets are needed here! 
+           The image renders natively in its clean cropped dimensions.
+        */
         .viewport-cropped {
-            width: 500px;
-            height: 480px;
+            width: auto;
+            max-width: 90%;
+            max-height: 80%;
             border: 3px solid #00FFFF;
             border-radius: 8px;
             overflow: hidden;
-            position: relative;
             background-color: #000;
-            display: none; /* Controlled via Javascript */
+            display: none;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
-
-        /* 
-           Crucial CSS Clip Mapping:
-           Our raw stream is 1920x1080.
-           To isolate the PFD or MFD, we scale and shift the single stream <img> 
-           relative to the 500x480 crop container using hardware-accelerated transforms.
-        */
         .viewport-cropped img {
-            position: absolute;
-            width: 1116px; /* Scales 1920px proportionally */
-            height: 628px; /* Scales 1080px proportionally */
-            max-width: none;
-        }
-
-        /* Coordinates to align Left PFD panel inside our crop window */
-        .crop-pfd img {
-            left: -29px;   /* Shifts X axis left */
-            top: -81px;   /* Shifts Y axis up */
-        }
-
-        /* Coordinates to align Right MFD panel inside our crop window */
-        .crop-mfd img {
-            left: -587px;  /* Shifts X axis left to display the MFD */
-            top: -81px;   /* Shifts Y axis up */
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
         }
     </style>
 </head>
@@ -211,34 +276,54 @@
 
         <!-- LEFT SIDEBAR CONTROLS -->
         <div class="sidebar">
-            
-            <div>
-                <div class="sidebar-section-title">Texture Capture Feed</div>
-                <p style="font-size: 12px; color: #888; margin-top: 5px; margin-bottom: 15px; line-height: 1.3;">
-                    PortalPanel captures the simulator's raw drawing target in real-time. Select a view to isolate gauges.
-                </p>
+            <div class="sidebar-scroll">
                 
-                <div style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Profile Manager Selection -->
+                <div class="sidebar-section-title" style="margin-top: 0;">Active Profile</div>
+                <select id="profile-select" class="select-input" style="margin-bottom: 20px;"></select>
+                
+                <!-- View Selector -->
+                <div class="sidebar-section-title">Streaming Viewports</div>
+                <div style="margin-bottom: 25px;">
                     <button class="panel-btn active" id="btn-view-raw">
                         <span>Full Texture Sheet</span>
-                        <span style="color: #555; font-size: 11px;">1920x1080</span>
+                        <span style="color: #555; font-size: 11px;">Raw</span>
                     </button>
                     <button class="panel-btn" id="btn-view-pfd">
                         <span>PFD Display (Left)</span>
                         <span style="color: #00FFFF; font-size: 11px;">Cropped</span>
                     </button>
                     <button class="panel-btn" id="btn-view-mfd">
-                        <span>MFD / Map Display (Right)</span>
+                        <span>MFD Display (Right)</span>
                         <span style="color: #00FFFF; font-size: 11px;">Cropped</span>
                     </button>
                 </div>
-            </div>
 
-            <div class="help-box">
-                <strong style="color: #FFF; font-size: 13px; display: block; margin-bottom: 5px;">How It Works:</strong>
-                Instead of popping out windows, PortalPanel reads raw textures. These WebSockets can be loaded inside Air Manager bezels or standard tablet browsers, with 0% impact on simulator performance.
-            </div>
+                <!-- Interactive Coordinates Form -->
+                <div class="sidebar-section-title">Smart Crop Coordinates</div>
+                <div class="coords-panel" style="margin-bottom: 20px;">
+                    <!-- PFD COORDS -->
+                    <span style="font-size: 11px; font-weight: bold; color: #FFF; border-bottom: 1px dashed #333; padding-bottom: 5px;">PFD Crop Bounds</span>
+                    <div class="coords-grid">
+                        <div class="coord-field"><span>X</span><input type="number" id="pfd-x" class="coord-input" value="50"></div>
+                        <div class="coord-field"><span>Y</span><input type="number" id="pfd-y" class="coord-input" value="140"></div>
+                        <div class="coord-field"><span>W</span><input type="number" id="pfd-w" class="coord-input" value="860"></div>
+                        <div class="coord-field"><span>H</span><input type="number" id="pfd-h" class="coord-input" value="800"></div>
+                    </div>
 
+                    <!-- MFD COORDS -->
+                    <span style="font-size: 11px; font-weight: bold; color: #FFF; border-bottom: 1px dashed #333; padding-bottom: 5px; margin-top: 10px;">MFD Crop Bounds</span>
+                    <div class="coords-grid">
+                        <div class="coord-field"><span>X</span><input type="number" id="mfd-x" class="coord-input" value="1010"></div>
+                        <div class="coord-field"><span>Y</span><input type="number" id="mfd-y" class="coord-input" value="140"></div>
+                        <div class="coord-field"><span>W</span><input type="number" id="mfd-w" class="coord-input" value="860"></div>
+                        <div class="coord-field"><span>H</span><input type="number" id="mfd-h" class="coord-input" value="800"></div>
+                    </div>
+                </div>
+
+                <button class="sidebar-btn-main" id="btn-save-layout" style="margin-bottom: 20px;">SAVE CROP PROFILE</button>
+
+            </div>
         </div>
 
         <!-- RIGHT DISPLAY CANVAS -->
@@ -249,22 +334,23 @@
                 <img src="/stream/raw" alt="Live Raw Texture Feed">
             </div>
 
-            <!-- VIEW 2: CROPPED PFD VIEWPORT -->
-            <div class="viewport-cropped crop-pfd" id="view-pfd-container">
-                <img src="/stream/raw" alt="Cropped PFD Feed">
+            <!-- VIEW 2: SERVER-SIDE CROPPED PFD VIEWPORT -->
+            <div class="viewport-cropped" id="view-pfd-container">
+                <img id="stream-pfd-img" src="/stream/crop/PFD" alt="Live Cropped PFD Feed">
             </div>
 
-            <!-- VIEW 3: CROPPED MFD VIEWPORT -->
-            <div class="viewport-cropped crop-mfd" id="view-mfd-container">
-                <img src="/stream/raw" alt="Cropped MFD Feed">
+            <!-- VIEW 3: SERVER-SIDE CROPPED MFD VIEWPORT -->
+            <div class="viewport-cropped" id="view-mfd-container">
+                <img id="stream-mfd-img" src="/stream/crop/MFD" alt="Live Cropped MFD Feed">
             </div>
 
         </div>
 
     </div>
 
-    <!-- FRONTEND ROUTING CONTROL -->
+    <!-- FRONTEND JAVASCRIPT LOGIC -->
     <script>
+        const profileSelect = document.getElementById('profile-select');
         const btnViewRaw = document.getElementById('btn-view-raw');
         const btnViewPfd = document.getElementById('btn-view-pfd');
         const btnViewMfd = document.getElementById('btn-view-mfd');
@@ -273,12 +359,150 @@
         const viewPfdContainer = document.getElementById('view-pfd-container');
         const viewMfdContainer = document.getElementById('view-mfd-container');
 
-        // Handles switching between viewports in the interface
+        const streamPfdImg = document.getElementById('stream-pfd-img');
+        const streamMfdImg = document.getElementById('stream-mfd-img');
+
+        // Coordinate inputs
+        const pfdX = document.getElementById('pfd-x');
+        const pfdY = document.getElementById('pfd-y');
+        const pfdW = document.getElementById('pfd-w');
+        const pfdH = document.getElementById('pfd-h');
+
+        const mfdX = document.getElementById('mfd-x');
+        const mfdY = document.getElementById('mfd-y');
+        const mfdW = document.getElementById('mfd-w');
+        const mfdH = document.getElementById('mfd-h');
+
+        const btnSaveLayout = document.getElementById('btn-save-layout');
+
+        let activeProfileFilename = "";
+        let currentAircraftName = "";
+
+        // =====================================================================
+        // LOAD AND LIST PROFILES FROM PYTHON BACKEND
+        // =====================================================================
+        function loadProfilesList() {
+            fetch('/api/list_profiles')
+                .then(res => res.json())
+                .then(profiles => {
+                    profileSelect.innerHTML = "";
+                    profiles.forEach(p => {
+                        const option = document.createElement('option');
+                        option.value = p.filename;
+                        option.textContent = p.aircraft_name;
+                        profileSelect.appendChild(option);
+                    });
+
+                    // Select and load the first available profile on startup
+                    if (profiles.length > 0) {
+                        activeProfileFilename = profiles[0].filename;
+                        loadProfileData(activeProfileFilename);
+                    }
+                })
+                .catch(err => console.error("Error loading profiles:", err));
+        }
+
+        function loadProfileData(filename) {
+            fetch(`/api/load_profile?filename=${encodeURIComponent(filename)}`)
+                .then(res => res.json())
+                .then(data => {
+                    currentAircraftName = data.aircraft_name;
+                    
+                    // Populate coordinate inputs
+                    const crops = data.crops || {};
+                    if (crops.PFD) {
+                        pfdX.value = crops.PFD.x;
+                        pfdY.value = crops.PFD.y;
+                        pfdW.value = crops.PFD.width;
+                        pfdH.value = crops.PFD.height;
+                    }
+                    if (crops.MFD) {
+                        mfdX.value = crops.MFD.x;
+                        mfdY.value = crops.MFD.y;
+                        mfdW.value = crops.MFD.width;
+                        mfdH.value = crops.MFD.height;
+                    }
+
+                    // Reload the cropped image sources to force a clean socket connection
+                    const timestamp = new Date().getTime();
+                    streamPfdImg.src = `/stream/crop/PFD?t=${timestamp}`;
+                    streamMfdImg.src = `/stream/crop/MFD?t=${timestamp}`;
+                })
+                .catch(err => console.error("Error loading active profile data:", err));
+        }
+
+        profileSelect.addEventListener('change', () => {
+            activeProfileFilename = profileSelect.value;
+            loadProfileData(activeProfileFilename);
+        });
+
+        // =====================================================================
+        // SAVE PROFILE COORDINATES TO DISK
+        // =====================================================================
+        btnSaveLayout.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const originalText = btnSaveLayout.textContent;
+            btnSaveLayout.textContent = "SAVING...";
+            btnSaveLayout.disabled = true;
+
+            const payload = {
+                aircraft_name: currentAircraftName,
+                crops: {
+                    PFD: {
+                        x: parseInt(pfdX.value) || 0,
+                        y: parseInt(pfdY.value) || 0,
+                        width: parseInt(pfdW.value) || 100,
+                        height: parseInt(pfdH.value) || 100
+                    },
+                    MFD: {
+                        x: parseInt(mfdX.value) || 0,
+                        y: parseInt(mfdY.value) || 0,
+                        width: parseInt(mfdW.value) || 100,
+                        height: parseInt(mfdH.value) || 100
+                    }
+                }
+            };
+
+            fetch('/api/save_profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    btnSaveLayout.textContent = "SAVED!";
+                    btnSaveLayout.style.borderColor = "#00FF00";
+                    btnSaveLayout.style.color = "#00FF00";
+                    
+                    // Force the stream graphics to reload dynamically to reflect new coordinates
+                    loadProfileData(activeProfileFilename);
+
+                    setTimeout(() => {
+                        btnSaveLayout.textContent = originalText;
+                        btnSaveLayout.style.borderColor = "#00FFFF";
+                        btnSaveLayout.style.color = "#00FFFF";
+                        btnSaveLayout.disabled = false;
+                    }, 2000);
+                } else {
+                    alert(data.message || "Failed to save profile.");
+                    btnSaveLayout.textContent = originalText;
+                    btnSaveLayout.disabled = false;
+                }
+            })
+            .catch(() => {
+                alert("Error communicating with saving API.");
+                btnSaveLayout.textContent = originalText;
+                btnSaveLayout.disabled = false;
+            });
+        });
+
+        // =====================================================================
+        // VIEWPORT SWITCHER CONTROL
+        // =====================================================================
         function selectActiveViewport(target) {
-            // Reset active states on buttons
             document.querySelectorAll('.panel-btn').forEach(btn => btn.classList.remove('active'));
             
-            // Hide all viewport containers
             viewRawContainer.style.display = 'none';
             viewPfdContainer.style.display = 'none';
             viewMfdContainer.style.display = 'none';
@@ -295,10 +519,12 @@
             }
         }
 
-        // Attach Click Listeners to Sidebar Options
         btnViewRaw.addEventListener('click', () => selectActiveViewport('raw'));
         btnViewPfd.addEventListener('click', () => selectActiveViewport('pfd'));
         btnViewMfd.addEventListener('click', () => selectActiveViewport('mfd'));
+
+        // Initialize App on load
+        loadProfilesList();
     </script>
 </body>
 </html>

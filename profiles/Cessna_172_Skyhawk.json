@@ -1,0 +1,17 @@
+{
+    "aircraft_name": "Cessna 172 Skyhawk",
+    "crops": {
+        "PFD": {
+            "x": 50,
+            "y": 140,
+            "width": 400,
+            "height": 800
+        },
+        "MFD": {
+            "x": 1010,
+            "y": 140,
+            "width": 860,
+            "height": 800
+        }
+    }
+}
