@@ -182,3 +182,6 @@ cython_debug/
 
 # Ignore AI reference images
 Images_For_AI/
+
+# PortalPanel local data
+user_data/
