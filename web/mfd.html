@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PortalPanel MFD</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -152,61 +153,87 @@
 
     <script>
         const statusText = document.getElementById('status-text');
+        const fpsText = document.getElementById('fps-text');
+        let d = {};
         let frameCount = 0;
         let lastFpsTime = performance.now();
-        const fpsText = document.getElementById('fps-text');
 
-        async function fetchData() {
+        // =====================================================
+        // WEBSOCKET: Listen for pushed data (no more polling!)
+        // =====================================================
+        let socket = null;
+
+        function connectWebSocket() {
             try {
-                const response = await fetch('/api/data');
-                const json = await response.json();
-                const d = json.data || {};
-                statusText.textContent = json.message || 'Unknown';
-                statusText.style.color = json.connected ? '#00FF00' : '#FF8800';
+                socket = io('http://127.0.0.1:8090');
 
-                function setVal(id, val, unit) {
-                    const el = document.getElementById(id);
-                    if (el) {
-                        if (val !== null && val !== undefined) {
-                            el.textContent = val + (unit ? ' ' + unit : '');
-                        } else {
-                            el.textContent = '---';
+                socket.on('connect', function() {
+                    console.log('[WS] Connected to PortalPanel server');
+                });
+
+                socket.on('instrument_data', function(payload) {
+                    d = payload.data || {};
+                    if (payload.status) {
+                        statusText.textContent = payload.status;
+                        statusText.style.color = payload.connected ? '#00FF00' : '#FF8800';
+                    }
+
+                    // Update MFD display
+                    function setVal(id, val, unit) {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            if (val !== null && val !== undefined) {
+                                el.textContent = val + (unit ? ' ' + unit : '');
+                            } else {
+                                el.textContent = '---';
+                            }
                         }
                     }
-                }
 
-                setVal('val-rpm', d.eng_rpm ? Math.round(d.eng_rpm) : null);
-                setVal('val-map', d.eng_manifold_press, 'inHg');
-                setVal('val-fuel-flow', d.eng_fuel_flow, 'GPH');
-                setVal('val-oil-temp', d.eng_oil_temp, 'F');
-                setVal('val-oil-press', d.eng_oil_pressure, 'PSI');
-                setVal('val-egt', d.eng_egt, 'F');
-                setVal('val-cht', d.eng_cht, 'F');
-                setVal('val-fuel-total', d.fuel_total, 'gal');
-                setVal('val-fuel-left', d.fuel_left, 'gal');
-                setVal('val-fuel-right', d.fuel_right, 'gal');
-                setVal('val-voltage', d.bus_voltage, 'V');
-                setVal('val-load', d.bus_load, 'A');
-                setVal('val-vacuum', d.vacuum, 'inHg');
-                setVal('val-lat', d.latitude ? d.latitude.toFixed(5) : null);
-                setVal('val-lon', d.longitude ? d.longitude.toFixed(5) : null);
-                setVal('val-gs', d.gps_ground_speed, 'kt');
+                    setVal('val-rpm', d.eng_rpm ? Math.round(d.eng_rpm) : null);
+                    setVal('val-map', d.eng_manifold_press, 'inHg');
+                    setVal('val-fuel-flow', d.eng_fuel_flow, 'GPH');
+                    setVal('val-oil-temp', d.eng_oil_temp, 'F');
+                    setVal('val-oil-press', d.eng_oil_pressure, 'PSI');
+                    setVal('val-egt', d.eng_egt, 'F');
+                    setVal('val-cht', d.eng_cht, 'F');
+                    setVal('val-fuel-total', d.fuel_total, 'gal');
+                    setVal('val-fuel-left', d.fuel_left, 'gal');
+                    setVal('val-fuel-right', d.fuel_right, 'gal');
+                    setVal('val-voltage', d.bus_voltage, 'V');
+                    setVal('val-load', d.bus_load, 'A');
+                    setVal('val-vacuum', d.vacuum, 'inHg');
+                    setVal('val-lat', d.latitude ? d.latitude.toFixed(5) : null);
+                    setVal('val-lon', d.longitude ? d.longitude.toFixed(5) : null);
+                    setVal('val-gs', d.gps_ground_speed, 'kt');
 
-                frameCount++;
-                const now = performance.now();
-                if (now - lastFpsTime > 1000) {
-                    fpsText.textContent = frameCount + ' fps';
-                    frameCount = 0;
-                    lastFpsTime = now;
-                }
+                    frameCount++;
+                    const now = performance.now();
+                    if (now - lastFpsTime > 1000) {
+                        fpsText.textContent = frameCount + ' fps';
+                        frameCount = 0;
+                        lastFpsTime = now;
+                    }
+                });
+
+                socket.on('disconnect', function() {
+                    console.log('[WS] Disconnected - retrying...');
+                    statusText.textContent = 'Disconnected - retrying...';
+                    statusText.style.color = '#FF0000';
+                });
+
+                socket.on('connect_error', function() {
+                    statusText.textContent = 'Connection error - retrying...';
+                    statusText.style.color = '#FF0000';
+                });
+
             } catch (e) {
-                statusText.textContent = 'Error: ' + e.message;
-                statusText.style.color = '#FF0000';
+                console.error('[WS] Error:', e);
+                setTimeout(connectWebSocket, 2000);
             }
         }
 
-        setInterval(fetchData, 200);
-        fetchData();
+        connectWebSocket();
     </script>
 </body>
 </html>
