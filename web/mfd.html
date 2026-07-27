@@ -12,48 +12,62 @@
             overflow: hidden;
             font-family: 'Courier New', monospace;
             color: #00FF00;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
         }
-        #mfd-container {
-            padding: 20px;
-            width: 600px;
-            height: 600px;
-        }
+
+        /* STATUS BAR */
         #status-bar {
             position: fixed; top: 0; left: 0; right: 0;
-            background: #0a0a0a; color: #00FF00;
-            font-size: 11px; padding: 3px 10px;
-            display: flex; justify-content: space-between;
-            z-index: 100;
+            height: 30px; background: rgba(10,10,10,0.95);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 12px; font-size: 10px; color: #00FF00;
+            font-family: 'Courier New', monospace; z-index: 100;
+            transition: opacity 0.3s;
         }
+        #status-bar.hidden { opacity: 0; pointer-events: none; }
+        #status-text { font-weight: bold; }
+        #fps-text { color: #888; }
+        #fullscreen-btn {
+            background: #222; border: 1px solid #444; color: #aaa;
+            padding: 3px 10px; border-radius: 3px; font-size: 10px;
+            cursor: pointer; font-family: 'Courier New', monospace; margin-left: 10px;
+        }
+        #fullscreen-btn:hover { background: #333; color: #fff; }
+
+        /* SCALE SLIDER */
+        #scale-control {
+            display: flex; align-items: center; gap: 8px; margin-left: 10px;
+        }
+        #scale-slider {
+            width: 80px; cursor: pointer;
+        }
+        #scale-label { font-size: 9px; color: #888; min-width: 35px; }
+
+        /* BEZEL */
+        #bezel {
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 4px solid #2a2a2a;
+            border-radius: 8px;
+            box-shadow: 0 0 0 4px #0d0d0d, 0 0 20px rgba(0,0,0,0.8);
+            padding: 8px;
+            margin-top: 35px;
+        }
+        #mfd-container { padding: 20px; width: 600px; }
         .section {
-            background: #0a0a0a;
-            border: 1px solid #1a1a1a;
-            border-radius: 4px;
-            padding: 12px;
-            margin-bottom: 10px;
+            background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px;
+            padding: 12px; margin-bottom: 8px;
         }
         .section-title {
-            font-size: 11px;
-            color: #666;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #222;
-            padding-bottom: 5px;
+            font-size: 11px; color: #666; text-transform: uppercase;
+            letter-spacing: 2px; margin-bottom: 8px;
+            border-bottom: 1px solid #222; padding-bottom: 5px;
         }
-        .data-row {
-            display: flex;
-            justify-content: space-between;
-            font-size: 16px;
-            padding: 4px 0;
-        }
-        .data-label {
-            color: #888;
-        }
-        .data-value {
-            color: #00FF66;
-            font-weight: bold;
-        }
+        .data-row { display: flex; justify-content: space-between; font-size: 16px; padding: 4px 0; }
+        .data-label { color: #888; }
+        .data-value { color: #00FF66; font-weight: bold; }
         .data-value.warn { color: #FF8800; }
         .data-value.crit { color: #FF0000; }
     </style>
@@ -61,179 +75,163 @@
 <body>
     <div id="status-bar">
         <span id="status-text">Connecting...</span>
-        <span id="fps-text">0 fps</span>
+        <div style="display: flex; align-items: center;">
+            <span id="fps-text">0 fps</span>
+            <div id="scale-control">
+                <input type="range" id="scale-slider" min="80" max="200" value="100" step="5">
+                <span id="scale-label">100%</span>
+            </div>
+            <button id="fullscreen-btn">Fullscreen</button>
+        </div>
     </div>
-    <div id="mfd-container">
-        <div style="height: 20px;"></div>
 
-        <div class="section">
-            <div class="section-title">ENGINE</div>
-            <div class="data-row">
-                <span class="data-label">RPM</span>
-                <span class="data-value" id="val-rpm">---</span>
+    <div id="bezel">
+        <div id="mfd-container">
+            <div class="section">
+                <div class="section-title">ENGINE</div>
+                <div class="data-row"><span class="data-label">RPM</span><span class="data-value" id="val-rpm">---</span></div>
+                <div class="data-row"><span class="data-label">MAP (inHg)</span><span class="data-value" id="val-map">---</span></div>
+                <div class="data-row"><span class="data-label">Fuel Flow (GPH)</span><span class="data-value" id="val-fuel-flow">---</span></div>
             </div>
-            <div class="data-row">
-                <span class="data-label">MAP (inHg)</span>
-                <span class="data-value" id="val-map">---</span>
+            <div class="section">
+                <div class="section-title">ENGINE TEMPERATURES</div>
+                <div class="data-row"><span class="data-label">Oil Temp (F)</span><span class="data-value" id="val-oil-temp">---</span></div>
+                <div class="data-row"><span class="data-label">Oil Press (PSI)</span><span class="data-value" id="val-oil-press">---</span></div>
+                <div class="data-row"><span class="data-label">EGT (F)</span><span class="data-value" id="val-egt">---</span></div>
+                <div class="data-row"><span class="data-label">CHT (F)</span><span class="data-value" id="val-cht">---</span></div>
             </div>
-            <div class="data-row">
-                <span class="data-label">Fuel Flow (GPH)</span>
-                <span class="data-value" id="val-fuel-flow">---</span>
+            <div class="section">
+                <div class="section-title">FUEL</div>
+                <div class="data-row"><span class="data-label">Total (gal)</span><span class="data-value" id="val-fuel-total">---</span></div>
+                <div class="data-row"><span class="data-label">Left (gal)</span><span class="data-value" id="val-fuel-left">---</span></div>
+                <div class="data-row"><span class="data-label">Right (gal)</span><span class="data-value" id="val-fuel-right">---</span></div>
             </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">ENGINE TEMPERATURES</div>
-            <div class="data-row">
-                <span class="data-label">Oil Temp (F)</span>
-                <span class="data-value" id="val-oil-temp">---</span>
+            <div class="section">
+                <div class="section-title">ELECTRICAL / VACUUM</div>
+                <div class="data-row"><span class="data-label">Bus Voltage</span><span class="data-value" id="val-voltage">---</span></div>
+                <div class="data-row"><span class="data-label">Bus Load (A)</span><span class="data-value" id="val-load">---</span></div>
+                <div class="data-row"><span class="data-label">Vacuum (inHg)</span><span class="data-value" id="val-vacuum">---</span></div>
             </div>
-            <div class="data-row">
-                <span class="data-label">Oil Press (PSI)</span>
-                <span class="data-value" id="val-oil-press">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">EGT (F)</span>
-                <span class="data-value" id="val-egt">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">CHT (F)</span>
-                <span class="data-value" id="val-cht">---</span>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">FUEL</div>
-            <div class="data-row">
-                <span class="data-label">Total (gal)</span>
-                <span class="data-value" id="val-fuel-total">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">Left (gal)</span>
-                <span class="data-value" id="val-fuel-left">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">Right (gal)</span>
-                <span class="data-value" id="val-fuel-right">---</span>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">ELECTRICAL / VACUUM</div>
-            <div class="data-row">
-                <span class="data-label">Bus Voltage</span>
-                <span class="data-value" id="val-voltage">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">Bus Load (A)</span>
-                <span class="data-value" id="val-load">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">Vacuum (inHg)</span>
-                <span class="data-value" id="val-vacuum">---</span>
-            </div>
-        </div>
-
-        <div class="section">
-            <div class="section-title">POSITION</div>
-            <div class="data-row">
-                <span class="data-label">Latitude</span>
-                <span class="data-value" id="val-lat">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">Longitude</span>
-                <span class="data-value" id="val-lon">---</span>
-            </div>
-            <div class="data-row">
-                <span class="data-label">Ground Speed</span>
-                <span class="data-value" id="val-gs">---</span>
+            <div class="section">
+                <div class="section-title">POSITION</div>
+                <div class="data-row"><span class="data-label">Latitude</span><span class="data-value" id="val-lat">---</span></div>
+                <div class="data-row"><span class="data-label">Longitude</span><span class="data-value" id="val-lon">---</span></div>
+                <div class="data-row"><span class="data-label">Ground Speed</span><span class="data-value" id="val-gs">---</span></div>
             </div>
         </div>
     </div>
 
     <script>
-        const statusText = document.getElementById('status-text');
-        const fpsText = document.getElementById('fps-text');
-        let d = {};
-        let frameCount = 0;
-        let lastFpsTime = performance.now();
+    const statusText = document.getElementById('status-text');
+    const fpsText = document.getElementById('fps-text');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const titleBar = document.getElementById('status-bar');
+    const scaleSlider = document.getElementById('scale-slider');
+    const scaleLabel = document.getElementById('scale-label');
+    const bezel = document.getElementById('bezel');
+    let d = {};
+    let frameCount = 0;
+    let lastFpsTime = performance.now();
 
-        // =====================================================
-        // WEBSOCKET: Listen for pushed data (no more polling!)
-        // =====================================================
-        let socket = null;
+    // SCALE SLIDER
+    scaleSlider.addEventListener('input', function() {
+        var scale = scaleSlider.value / 100;
+        scaleLabel.textContent = scaleSlider.value + '%';
+        bezel.style.transform = 'scale(' + scale + ')';
+        bezel.style.transformOrigin = 'center top';
+    });
 
-        function connectWebSocket() {
-            try {
-                socket = io('http://127.0.0.1:8090');
+    // WEBSOCKET
+    let socket = null;
+    function connectWebSocket() {
+        try {
+            socket = io('http://127.0.0.1:8090');
+            socket.on('connect', function() { console.log('[WS] Connected'); });
+            socket.on('instrument_data', function(payload) {
+                d = payload.data || {};
+                if (payload.status) {
+                    statusText.textContent = payload.status;
+                    statusText.style.color = payload.connected ? '#00FF00' : '#FF8800';
+                }
+                updateMFD();
+                frameCount++;
+                var now = performance.now();
+                if (now - lastFpsTime > 1000) {
+                    fpsText.textContent = frameCount + ' fps';
+                    frameCount = 0; lastFpsTime = now;
+                }
+            });
+            socket.on('disconnect', function() {
+                statusText.textContent = 'Disconnected - retrying...';
+                statusText.style.color = '#FF0000';
+            });
+            socket.on('connect_error', function() {
+                statusText.textContent = 'Connection error - retrying...';
+                statusText.style.color = '#FF0000';
+            });
+        } catch (e) {
+            console.error('[WS] Error:', e);
+            setTimeout(connectWebSocket, 2000);
+        }
+    }
 
-                socket.on('connect', function() {
-                    console.log('[WS] Connected to PortalPanel server');
-                });
-
-                socket.on('instrument_data', function(payload) {
-                    d = payload.data || {};
-                    if (payload.status) {
-                        statusText.textContent = payload.status;
-                        statusText.style.color = payload.connected ? '#00FF00' : '#FF8800';
-                    }
-
-                    // Update MFD display
-                    function setVal(id, val, unit) {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            if (val !== null && val !== undefined) {
-                                el.textContent = val + (unit ? ' ' + unit : '');
-                            } else {
-                                el.textContent = '---';
-                            }
-                        }
-                    }
-
-                    setVal('val-rpm', d.eng_rpm ? Math.round(d.eng_rpm) : null);
-                    setVal('val-map', d.eng_manifold_press, 'inHg');
-                    setVal('val-fuel-flow', d.eng_fuel_flow, 'GPH');
-                    setVal('val-oil-temp', d.eng_oil_temp, 'F');
-                    setVal('val-oil-press', d.eng_oil_pressure, 'PSI');
-                    setVal('val-egt', d.eng_egt, 'F');
-                    setVal('val-cht', d.eng_cht, 'F');
-                    setVal('val-fuel-total', d.fuel_total, 'gal');
-                    setVal('val-fuel-left', d.fuel_left, 'gal');
-                    setVal('val-fuel-right', d.fuel_right, 'gal');
-                    setVal('val-voltage', d.bus_voltage, 'V');
-                    setVal('val-load', d.bus_load, 'A');
-                    setVal('val-vacuum', d.vacuum, 'inHg');
-                    setVal('val-lat', d.latitude ? d.latitude.toFixed(5) : null);
-                    setVal('val-lon', d.longitude ? d.longitude.toFixed(5) : null);
-                    setVal('val-gs', d.gps_ground_speed, 'kt');
-
-                    frameCount++;
-                    const now = performance.now();
-                    if (now - lastFpsTime > 1000) {
-                        fpsText.textContent = frameCount + ' fps';
-                        frameCount = 0;
-                        lastFpsTime = now;
-                    }
-                });
-
-                socket.on('disconnect', function() {
-                    console.log('[WS] Disconnected - retrying...');
-                    statusText.textContent = 'Disconnected - retrying...';
-                    statusText.style.color = '#FF0000';
-                });
-
-                socket.on('connect_error', function() {
-                    statusText.textContent = 'Connection error - retrying...';
-                    statusText.style.color = '#FF0000';
-                });
-
-            } catch (e) {
-                console.error('[WS] Error:', e);
-                setTimeout(connectWebSocket, 2000);
+    function updateMFD() {
+        function setVal(id, val, unit) {
+            var el = document.getElementById(id);
+            if (el) {
+                if (val !== null && val !== undefined) {
+                    el.textContent = val + (unit ? ' ' + unit : '');
+                } else {
+                    el.textContent = '---';
+                }
             }
         }
+        setVal('val-rpm', d.eng_rpm ? Math.round(d.eng_rpm) : null);
+        setVal('val-map', d.eng_manifold_press, 'inHg');
+        setVal('val-fuel-flow', d.eng_fuel_flow, 'GPH');
+        setVal('val-oil-temp', d.eng_oil_temp, 'F');
+        setVal('val-oil-press', d.eng_oil_pressure, 'PSI');
+        setVal('val-egt', d.eng_egt, 'F');
+        setVal('val-cht', d.eng_cht, 'F');
+        setVal('val-fuel-total', d.fuel_total, 'gal');
+        setVal('val-fuel-left', d.fuel_left, 'gal');
+        setVal('val-fuel-right', d.fuel_right, 'gal');
+        setVal('val-voltage', d.bus_voltage, 'V');
+        setVal('val-load', d.bus_load, 'A');
+        setVal('val-vacuum', d.vacuum, 'inHg');
+        setVal('val-lat', d.latitude ? d.latitude.toFixed(5) : null);
+        setVal('val-lon', d.longitude ? d.longitude.toFixed(5) : null);
+        setVal('val-gs', d.gps_ground_speed, 'kt');
+    }
 
-        connectWebSocket();
+    // FULLSCREEN
+    fullscreenBtn.addEventListener('click', function() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+            fullscreenBtn.textContent = 'Exit FS';
+        } else {
+            document.exitFullscreen();
+            fullscreenBtn.textContent = 'Fullscreen';
+        }
+    });
+    document.addEventListener('fullscreenchange', function() {
+        fullscreenBtn.textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
+    });
+
+    // AUTO-HIDE TITLE BAR
+    let hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 5000);
+    document.addEventListener('mousemove', function(e) {
+        if (e.clientY < 30) {
+            titleBar.classList.remove('hidden');
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 3000);
+        } else if (e.clientY > 40) {
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 500);
+        }
+    });
+
+    connectWebSocket();
     </script>
 </body>
 </html>

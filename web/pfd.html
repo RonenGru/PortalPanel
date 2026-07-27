@@ -7,41 +7,150 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #000; overflow: hidden; font-family: 'Courier New', monospace; }
-        #pfd-canvas { display: block; }
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+
+        /* STATUS BAR */
         #status-bar {
             position: fixed; top: 0; left: 0; right: 0;
-            background: #0a0a0a; color: #00FF00;
-            font-size: 11px; padding: 3px 10px;
-            display: flex; justify-content: space-between;
-            z-index: 100;
+            height: 30px; background: rgba(10,10,10,0.95);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 12px; font-size: 10px; color: #00FF00;
+            font-family: 'Courier New', monospace; z-index: 100;
+            transition: opacity 0.3s;
         }
+        #status-bar.hidden { opacity: 0; pointer-events: none; }
+        #status-text { font-weight: bold; }
+        #fps-text { color: #888; }
+        #fullscreen-btn {
+            background: #222; border: 1px solid #444; color: #aaa;
+            padding: 3px 10px; border-radius: 3px; font-size: 10px;
+            cursor: pointer; font-family: 'Courier New', monospace; margin-left: 10px;
+        }
+        #fullscreen-btn:hover { background: #333; color: #fff; }
+
+        /* UNIFIED BEZEL */
+        #bezel {
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 4px solid #2a2a2a;
+            border-radius: 8px;
+            box-shadow: 0 0 0 4px #0d0d0d, 0 0 20px rgba(0,0,0,0.8);
+            padding: 12px;
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(1.4);
+        }
+
+        /* LEFT PANEL - NAV1, NAV2, BARO */
+        #left-info {
+            width: 90px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            justify-content: flex-end;
+            padding-bottom: 10px;
+        }
+        .info-box {
+            background: #000; border: 1px solid #00FF00; border-radius: 3px;
+            padding: 6px 8px; color: #00FF00; font-size: 11px;
+            font-family: 'Courier New', monospace; text-align: center;
+        }
+        .info-box .label { font-size: 8px; color: #888; margin-bottom: 2px; }
+        .info-box .value { font-size: 14px; font-weight: bold; }
+
+        /* PFD CANVAS */
+        #pfd-section { background: #000; border-radius: 4px; }
+        #pfd-canvas { display: block; border-radius: 4px; }
+
+        /* CENTER COLUMN - Soft keys + VSI */
+        #center-column {
+            width: 70px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding-top: 10px;
+        }
+        .softkey {
+            background: #1a1a1a; border: 1px solid #333; border-radius: 3px;
+            padding: 8px 4px; text-align: center; font-size: 8px; color: #666;
+            font-family: 'Arial', sans-serif; cursor: pointer; user-select: none;
+            transition: all 0.15s;
+        }
+        .softkey:hover { background: #2a2a2a; color: #aaa; border-color: #555; }
+        .softkey:active { background: #333; color: #fff; }
+        .softkey.active { background: #003344; color: #00FFFF; border-color: #006677; }
+        #vsi-box { margin-top: 8px; display: flex; justify-content: center; }
+        #vsi-canvas { display: block; }
     </style>
 </head>
 <body>
-    <div id="status-bar">
+        <div id="status-bar">
         <span id="status-text">Connecting...</span>
-        <span id="fps-text">0 fps</span>
+        <div style="display: flex; align-items: center;">
+            <span id="fps-text">0 fps</span>
+            <div id="scale-control">
+                <input type="range" id="scale-slider" min="80" max="200" value="100" step="5">
+                <span id="scale-label">100%</span>
+            </div>
+            <button id="fullscreen-btn">Fullscreen</button>
+        </div>
     </div>
-    <canvas id="pfd-canvas" width="600" height="600"></canvas>
+
+    <div id="bezel">
+        <div id="left-info">
+            <div class="info-box">
+                <div class="label">NAV1</div>
+                <div class="value" id="info-nav1">---.--</div>
+            </div>
+            <div class="info-box">
+                <div class="label">NAV2</div>
+                <div class="value" id="info-nav2">---.--</div>
+            </div>
+            <div class="info-box">
+                <div class="label">BARO</div>
+                <div class="value" id="info-baro">----</div>
+            </div>
+        </div>
+
+        <div id="pfd-section">
+            <canvas id="pfd-canvas" width="600" height="600"></canvas>
+        </div>
+
+        <div id="center-column">
+            <div class="softkey active">PFD</div>
+            <div class="softkey">INSET</div>
+            <div class="softkey">CDI</div>
+            <div class="softkey">DME</div>
+            <div class="softkey">NRST</div>
+            <div class="softkey">BACK</div>
+            <div class="softkey">ENT</div>
+            <div id="vsi-box">
+                <canvas id="vsi-canvas" width="60" height="60"></canvas>
+            </div>
+        </div>
+    </div>
 
     <script>
-    // =====================================================
-    // PORTALPANEL PFD - Primary Flight Display
-    // =====================================================
-
     const canvas = document.getElementById('pfd-canvas');
     const ctx = canvas.getContext('2d');
+    const vsiCanvas = document.getElementById('vsi-canvas');
+    const vsiCtx = vsiCanvas.getContext('2d');
     const statusText = document.getElementById('status-text');
     const fpsText = document.getElementById('fps-text');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const titleBar = document.getElementById('status-bar');
     const W = canvas.width;
     const H = canvas.height;
     const CX = W / 2;
     const CY = H / 2;
 
-    // Data store
     let d = {};
-    // Interpolation: smoothly animate toward target values
     let smooth = {
         pitch: 0, roll: 0, airspeed: 0,
         altitude: 0, heading_mag: 0, vertical_speed: 0,
@@ -52,82 +161,101 @@
     let frameCount = 0;
     let lastFpsTime = performance.now();
 
-    // =====================================================
-    // WEBSOCKET: Listen for pushed data
-    // =====================================================
+    // WEBSOCKET
     let socket = null;
-
     function connectWebSocket() {
         try {
             socket = io('http://127.0.0.1:8090');
-
-            socket.on('connect', function() {
-                console.log('[WS] Connected');
-            });
-
+            socket.on('connect', function() { console.log('[WS] Connected'); });
             socket.on('instrument_data', function(payload) {
                 d = payload.data || {};
                 if (payload.status) {
                     statusText.textContent = payload.status;
                     statusText.style.color = payload.connected ? '#00FF00' : '#FF8800';
                 }
+                updateSideInfo();
             });
-
             socket.on('disconnect', function() {
                 statusText.textContent = 'Disconnected - retrying...';
                 statusText.style.color = '#FF0000';
             });
-
             socket.on('connect_error', function() {
                 statusText.textContent = 'Connection error - retrying...';
                 statusText.style.color = '#FF0000';
             });
-
         } catch (e) {
             console.error('[WS] Error:', e);
             setTimeout(connectWebSocket, 2000);
         }
     }
 
-    // =====================================================
+    function updateSideInfo() {
+        document.getElementById('info-nav1').textContent = d.nav1_freq ? d.nav1_freq.toFixed(2) : '---.--';
+        document.getElementById('info-nav2').textContent = d.nav2_freq ? d.nav2_freq.toFixed(2) : '---.--';
+        document.getElementById('info-baro').textContent = d.baro_pressure ? d.baro_pressure.toFixed(1) : '----';
+    }
+
+    // FULLSCREEN
+    fullscreenBtn.addEventListener('click', function() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+            fullscreenBtn.textContent = 'Exit FS';
+        } else {
+            document.exitFullscreen();
+            fullscreenBtn.textContent = 'Fullscreen';
+        }
+    });
+    document.addEventListener('fullscreenchange', function() {
+        fullscreenBtn.textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
+    });
+	
+	    // SCALE SLIDER
+    var scaleSlider = document.getElementById('scale-slider');
+    var scaleLabel = document.getElementById('scale-label');
+    scaleSlider.addEventListener('input', function() {
+        var scale = scaleSlider.value / 100;
+        scaleLabel.textContent = scaleSlider.value + '%';
+        bezel.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
+    });
+	
+    let hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 5000);
+    document.addEventListener('mousemove', function(e) {
+        if (e.clientY < 30) {
+            titleBar.classList.remove('hidden');
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 3000);
+        } else if (e.clientY > 40) {
+            clearTimeout(hideTimeout);
+            hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 500);
+        }
+    });
+
     // DRAW ATTITUDE INDICATOR
-    // =====================================================
     function drawAttitudeIndicator() {
         var pitch = smooth.pitch || 0;
         var roll = smooth.roll || 0;
         var pxPerDeg = 5;
-
         ctx.save();
         ctx.beginPath();
         ctx.arc(CX, CY, 240, 0, Math.PI * 2);
         ctx.clip();
-
         ctx.save();
         ctx.translate(CX, CY);
         ctx.rotate(roll * Math.PI / 180);
-
         var pitchOffset = pitch * pxPerDeg;
-
-        // Sky
-        ctx.fillStyle = '#0099FF';
+        ctx.fillStyle = '#0A5FA5';
         ctx.fillRect(-600, -600 - pitchOffset, 1200, 600);
-
-        // Ground
-        ctx.fillStyle = '#996633';
+        ctx.fillStyle = '#5B3A0C';
         ctx.fillRect(-600, 0 - pitchOffset, 1200, 600);
-
-        // Horizon line
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.moveTo(-600, 0 - pitchOffset);
         ctx.lineTo(600, 0 - pitchOffset);
         ctx.stroke();
-
-        // Pitch ladder
         ctx.strokeStyle = '#FFFFFF';
         ctx.fillStyle = '#FFFFFF';
-        ctx.font = '14px Courier New';
+        ctx.font = '12px Arial';
         ctx.lineWidth = 1;
         for (var deg = -30; deg <= 30; deg += 5) {
             if (deg === 0) continue;
@@ -142,35 +270,25 @@
                 ctx.fillText(deg + '', -len - 30, -y + 5);
             }
         }
-
         ctx.restore();
         ctx.restore();
-
-        // Aircraft reference
         ctx.strokeStyle = '#FFFF00';
         ctx.lineWidth = 4;
         ctx.beginPath();
-        ctx.moveTo(CX - 80, CY);
-        ctx.lineTo(CX - 25, CY);
-        ctx.moveTo(CX + 25, CY);
-        ctx.lineTo(CX + 80, CY);
+        ctx.moveTo(CX - 80, CY); ctx.lineTo(CX - 25, CY);
+        ctx.moveTo(CX + 25, CY); ctx.lineTo(CX + 80, CY);
         ctx.stroke();
-
         ctx.fillStyle = '#FFFF00';
         ctx.beginPath();
         ctx.arc(CX, CY, 3, 0, Math.PI * 2);
         ctx.fill();
-
-        // Roll indicator arc
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(CX, CY, 260, -Math.PI / 2 - Math.PI / 3, -Math.PI / 2 + Math.PI / 3);
+        ctx.arc(CX, CY, 260, -Math.PI/2 - Math.PI/3, -Math.PI/2 + Math.PI/3);
         ctx.stroke();
-
-        // Roll ticks
         for (var r = -60; r <= 60; r += 10) {
-            var angle = -Math.PI / 2 + (r * Math.PI / 180);
+            var angle = -Math.PI/2 + (r * Math.PI / 180);
             var inner = (Math.abs(r) === 30 || Math.abs(r) === 60) ? 243 : 250;
             var outer = 260;
             ctx.beginPath();
@@ -178,162 +296,84 @@
             ctx.lineTo(CX + outer * Math.cos(angle), CY + outer * Math.sin(angle));
             ctx.stroke();
         }
-
-        // Roll pointer
         ctx.save();
         ctx.translate(CX, CY);
         ctx.rotate(-roll * Math.PI / 180);
         ctx.beginPath();
-        ctx.moveTo(0, -260);
-        ctx.lineTo(-8, -275);
-        ctx.lineTo(8, -275);
+        ctx.moveTo(0, -260); ctx.lineTo(-8, -275); ctx.lineTo(8, -275);
         ctx.closePath();
         ctx.fillStyle = '#FFFF00';
         ctx.fill();
         ctx.restore();
     }
 
-    // =====================================================
     // DRAW AIRSPEED TAPE
-    // =====================================================
     function drawAirspeedTape() {
         var as = smooth.airspeed || 0;
-        var x = 20;
-        var tapeTop = 100;
-        var tapeBottom = 500;
+        var x = 20, tapeTop = 100, tapeBottom = 500;
         var tapeMid = (tapeTop + tapeBottom) / 2;
-        var range = 40;
-        var pxPerKt = (tapeBottom - tapeTop) / (range * 2);
-
-        ctx.fillStyle = '#111';
-        ctx.fillRect(x, tapeTop, 80, tapeBottom - tapeTop);
-        ctx.strokeStyle = '#FFF';
-        ctx.lineWidth = 2;
+        var range = 40, pxPerKt = (tapeBottom - tapeTop) / (range * 2);
+        ctx.fillStyle = '#111'; ctx.fillRect(x, tapeTop, 80, tapeBottom - tapeTop);
+        ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2;
         ctx.strokeRect(x, tapeTop, 80, tapeBottom - tapeTop);
-
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, tapeTop, 80, tapeBottom - tapeTop);
-        ctx.clip();
-
-        ctx.strokeStyle = '#FFF';
-        ctx.fillStyle = '#FFF';
-        ctx.font = '12px Courier New';
-        ctx.textAlign = 'right';
-        var minKt = Math.floor(as - range);
-        var maxKt = Math.ceil(as + range);
-        for (var kt = minKt; kt <= maxKt; kt += 10) {
+        ctx.beginPath(); ctx.rect(x, tapeTop, 80, tapeBottom - tapeTop); ctx.clip();
+        ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial'; ctx.textAlign = 'right';
+        for (var kt = Math.floor(as - range); kt <= Math.ceil(as + range); kt += 10) {
             var y = tapeMid - (kt - as) * pxPerKt;
             if (y < tapeTop || y > tapeBottom) continue;
             var len = (kt % 10 === 0) ? 20 : 10;
-            ctx.beginPath();
-            ctx.moveTo(x + 80, y);
-            ctx.lineTo(x + 80 - len, y);
-            ctx.stroke();
-            if (kt % 10 === 0) {
-                ctx.fillText(kt + '', x + 78, y + 4);
-            }
+            ctx.beginPath(); ctx.moveTo(x + 80, y); ctx.lineTo(x + 80 - len, y); ctx.stroke();
+            if (kt % 10 === 0) ctx.fillText(kt + '', x + 78, y + 4);
         }
         ctx.restore();
-
-        ctx.fillStyle = '#000';
-        ctx.fillRect(x - 5, tapeMid - 15, 90, 30);
-        ctx.strokeStyle = '#FFFF00';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
-        ctx.fillStyle = '#FFFF00';
-        ctx.font = '20px Courier New';
-        ctx.textAlign = 'right';
+        ctx.fillStyle = '#000'; ctx.fillRect(x - 5, tapeMid - 15, 90, 30);
+        ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
+        ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'right';
         ctx.fillText(Math.round(as) + '', x + 80, tapeMid + 6);
     }
 
-    // =====================================================
     // DRAW ALTITUDE TAPE
-    // =====================================================
     function drawAltitudeTape() {
         var alt = smooth.altitude || 0;
-        var x = W - 100;
-        var tapeTop = 100;
-        var tapeBottom = 500;
+        var x = W - 100, tapeTop = 100, tapeBottom = 500;
         var tapeMid = (tapeTop + tapeBottom) / 2;
-        var range = 400;
-        var pxPerFt = (tapeBottom - tapeTop) / (range * 2);
-
-        ctx.fillStyle = '#111';
-        ctx.fillRect(x, tapeTop, 80, tapeBottom - tapeTop);
-        ctx.strokeStyle = '#FFF';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, tapeTop, 80, tapeBottom - tapeTop);
-
+        var range = 400, pxPerFt = (tapeBottom - tapeTop) / (range * 2);
+        ctx.fillStyle = '#111'; ctx.fillRect(x, tapeTop, 80, tapeBottom - tapeTop);
+        ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2; ctx.strokeRect(x, tapeTop, 80, tapeBottom - tapeTop);
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(x, tapeTop, 80, tapeBottom - tapeTop);
-        ctx.clip();
-
-        ctx.strokeStyle = '#FFF';
-        ctx.fillStyle = '#FFF';
-        ctx.font = '12px Courier New';
-        ctx.textAlign = 'left';
-        var minFt = Math.floor((alt - range) / 100) * 100;
-        var maxFt = Math.ceil((alt + range) / 100) * 100;
-        for (var ft = minFt; ft <= maxFt; ft += 100) {
+        ctx.beginPath(); ctx.rect(x, tapeTop, 80, tapeBottom - tapeTop); ctx.clip();
+        ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial'; ctx.textAlign = 'left';
+        for (var ft = Math.floor((alt - range) / 100) * 100; ft <= Math.ceil((alt + range) / 100) * 100; ft += 100) {
             var y = tapeMid - (ft - alt) * pxPerFt;
             if (y < tapeTop || y > tapeBottom) continue;
             var len = (ft % 500 === 0) ? 20 : 10;
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-            ctx.lineTo(x + len, y);
-            ctx.stroke();
-            if (ft % 500 === 0) {
-                ctx.fillText(ft + '', x + 24, y + 4);
-            }
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + len, y); ctx.stroke();
+            if (ft % 500 === 0) ctx.fillText(ft + '', x + 24, y + 4);
         }
         ctx.restore();
-
-        ctx.fillStyle = '#000';
-        ctx.fillRect(x - 5, tapeMid - 15, 90, 30);
-        ctx.strokeStyle = '#FFFF00';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
-        ctx.fillStyle = '#FFFF00';
-        ctx.font = '20px Courier New';
-        ctx.textAlign = 'right';
+        ctx.fillStyle = '#000'; ctx.fillRect(x - 5, tapeMid - 15, 90, 30);
+        ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
+        ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'right';
         ctx.fillText(Math.round(alt) + '', x + 80, tapeMid + 6);
     }
 
-    // =====================================================
     // DRAW HEADING TAPE
-    // =====================================================
     function drawHeadingTape() {
         var heading = smooth.heading_mag || 0;
-        var tapeTop = 520;
-        var tapeBottom = 580;
-        var tapeMid = (tapeTop + tapeBottom) / 2;
-        var range = 45;
-        var pxPerDeg = W / (range * 2);
-
-        ctx.fillStyle = '#111';
-        ctx.fillRect(0, tapeTop, W, tapeBottom - tapeTop);
-
+        var tapeTop = 520, tapeBottom = 580, tapeMid = (tapeTop + tapeBottom) / 2;
+        var range = 45, pxPerDeg = W / (range * 2);
+        ctx.fillStyle = '#111'; ctx.fillRect(0, tapeTop, W, tapeBottom - tapeTop);
         ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, tapeTop, W, tapeBottom - tapeTop);
-        ctx.clip();
-
-        ctx.strokeStyle = '#FFF';
-        ctx.fillStyle = '#FFF';
-        ctx.font = '12px Courier New';
-        ctx.textAlign = 'center';
+        ctx.beginPath(); ctx.rect(0, tapeTop, W, tapeBottom - tapeTop); ctx.clip();
+        ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial'; ctx.textAlign = 'center';
         for (var deg = Math.floor(heading - range); deg <= Math.ceil(heading + range); deg += 5) {
             var actualDeg = deg;
             while (actualDeg < 0) actualDeg += 360;
             while (actualDeg >= 360) actualDeg -= 360;
             var x = CX + (deg - heading) * pxPerDeg;
             var len = (deg % 10 === 0) ? 15 : 8;
-            ctx.beginPath();
-            ctx.moveTo(x, tapeMid - 15);
-            ctx.lineTo(x, tapeMid - 15 + len);
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(x, tapeMid - 15); ctx.lineTo(x, tapeMid - 15 + len); ctx.stroke();
             if (deg % 10 === 0) {
                 var label;
                 if (actualDeg === 0) label = 'N';
@@ -345,155 +385,66 @@
             }
         }
         ctx.restore();
-
-        ctx.fillStyle = '#000';
-        ctx.fillRect(CX - 30, tapeMid - 15, 60, 30);
-        ctx.strokeStyle = '#FFFF00';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(CX - 30, tapeMid - 15, 60, 30);
-        ctx.fillStyle = '#FFFF00';
-        ctx.font = '20px Courier New';
-        ctx.textAlign = 'center';
+        ctx.fillStyle = '#000'; ctx.fillRect(CX - 30, tapeMid - 15, 60, 30);
+        ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(CX - 30, tapeMid - 15, 60, 30);
+        ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'center';
         ctx.fillText(Math.round(heading) + '', CX, tapeMid + 6);
-
         ctx.fillStyle = '#FFFF00';
-        ctx.beginPath();
-        ctx.moveTo(CX - 8, tapeTop);
-        ctx.lineTo(CX + 8, tapeTop);
-        ctx.lineTo(CX, tapeTop + 12);
-        ctx.closePath();
-        ctx.fill();
+        ctx.beginPath(); ctx.moveTo(CX - 8, tapeTop); ctx.lineTo(CX + 8, tapeTop); ctx.lineTo(CX, tapeTop + 12);
+        ctx.closePath(); ctx.fill();
     }
 
-    // =====================================================
-    // DRAW VSI
-    // =====================================================
+    // DRAW VSI (separate canvas)
     function drawVSI() {
         var vs = smooth.vertical_speed || 0;
-        var x = W - 50;
-        var y = H - 50;
-        var radius = 40;
-
-        ctx.fillStyle = '#111';
-        ctx.beginPath();
-        ctx.arc(x, y, radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#FFF';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.strokeStyle = '#FFF';
-        ctx.fillStyle = '#FFF';
-        ctx.font = '8px Courier New';
-        ctx.textAlign = 'center';
-        for (var v = -2000; v <= 2000; v += 500) {
-            var angle = -Math.PI / 2 + (v / 2000) * (Math.PI * 0.75);
-            var r1 = radius - 8;
-            var r2 = radius - 2;
-            ctx.beginPath();
-            ctx.moveTo(x + r1 * Math.cos(angle), y + r1 * Math.sin(angle));
-            ctx.lineTo(x + r2 * Math.cos(angle), y + r2 * Math.sin(angle));
-            ctx.stroke();
-            if (v % 1000 === 0) {
-                ctx.fillText(Math.abs(v / 1000) + '',
-                    x + (radius + 8) * Math.cos(angle),
-                    y + (radius + 8) * Math.sin(angle) + 3);
-            }
+        var c = vsiCanvas;
+        var cx = c.width / 2, cy = c.height / 2, radius = 25;
+        vsiCtx.fillStyle = '#111';
+        vsiCtx.beginPath(); vsiCtx.arc(cx, cy, radius, 0, Math.PI * 2); vsiCtx.fill();
+        vsiCtx.strokeStyle = '#FFF'; vsiCtx.lineWidth = 1; vsiCtx.stroke();
+        vsiCtx.strokeStyle = '#FFF'; vsiCtx.fillStyle = '#FFF'; vsiCtx.font = '5px Arial'; vsiCtx.textAlign = 'center';
+        for (var v = -2000; v <= 2000; v += 1000) {
+            var angle = -Math.PI/2 + (v / 2000) * (Math.PI * 0.75);
+            vsiCtx.beginPath();
+            vsiCtx.moveTo(cx + (radius-4) * Math.cos(angle), cy + (radius-4) * Math.sin(angle));
+            vsiCtx.lineTo(cx + radius * Math.cos(angle), cy + radius * Math.sin(angle));
+            vsiCtx.stroke();
         }
-
         var vsClamped = Math.max(-2500, Math.min(2500, vs));
-        var needleAngle = -Math.PI / 2 + (vsClamped / 2000) * (Math.PI * 0.75);
-        ctx.strokeStyle = '#FFFF00';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + (radius - 5) * Math.cos(needleAngle), y + (radius - 5) * Math.sin(needleAngle));
-        ctx.stroke();
+        var needleAngle = -Math.PI/2 + (vsClamped / 2000) * (Math.PI * 0.75);
+        vsiCtx.strokeStyle = '#FFFF00'; vsiCtx.lineWidth = 2;
+        vsiCtx.beginPath(); vsiCtx.moveTo(cx, cy);
+        vsiCtx.lineTo(cx + (radius-3) * Math.cos(needleAngle), cy + (radius-3) * Math.sin(needleAngle));
+        vsiCtx.stroke();
     }
 
-    // =====================================================
-    // DRAW NAV FREQUENCIES
-    // =====================================================
-    function drawNavInfo() {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(20, H - 60, 120, 25);
-        ctx.strokeStyle = '#0a0';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(20, H - 60, 120, 25);
-        ctx.fillStyle = '#00FF00';
-        ctx.font = '14px Courier New';
-        ctx.textAlign = 'left';
-        var nav1 = d.nav1_freq ? d.nav1_freq.toFixed(2) : '---.--';
-        ctx.fillText('NAV1: ' + nav1, 25, H - 42);
-
-        ctx.fillStyle = '#000';
-        ctx.fillRect(20, H - 30, 120, 25);
-        ctx.strokeStyle = '#0a0';
-        ctx.strokeRect(20, H - 30, 120, 25);
-        ctx.fillStyle = '#00FF00';
-        var nav2 = d.nav2_freq ? d.nav2_freq.toFixed(2) : '---.--';
-        ctx.fillText('NAV2: ' + nav2, 25, H - 12);
-    }
-
-    // =====================================================
-    // DRAW BARO SETTING
-    // =====================================================
-    function drawBaro() {
-        var baro = d.baro_pressure || 1013;
-        var x = W - 120;
-        var y = H - 70;
-        ctx.fillStyle = '#000';
-        ctx.fillRect(x, y, 100, 22);
-        ctx.strokeStyle = '#0a0';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x, y, 100, 22);
-        ctx.fillStyle = '#00FF00';
-        ctx.font = '12px Courier New';
-        ctx.textAlign = 'left';
-        ctx.fillText('BARO: ' + baro.toFixed(1), x + 5, y + 16);
-    }
-
-    // =====================================================
     // MAIN RENDER LOOP
-    // =====================================================
     function render() {
         var now = performance.now();
         if (!render.lastTime) render.lastTime = now;
         var dt = Math.min((now - render.lastTime) / 16.67, 3.0);
         render.lastTime = now;
-
         var lerpFactor = 1.0 - Math.pow(1.0 - SMOOTH_FACTOR, dt);
-
         for (var key in smooth) {
             if (d[key] !== undefined && d[key] !== null) {
                 smooth[key] += (d[key] - smooth[key]) * lerpFactor;
             }
         }
-
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, W, H);
-
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
         drawAttitudeIndicator();
         drawAirspeedTape();
         drawAltitudeTape();
         drawHeadingTape();
         drawVSI();
-        drawNavInfo();
-        drawBaro();
-
         frameCount++;
         if (now - lastFpsTime > 1000) {
             fpsText.textContent = frameCount + ' fps';
-            frameCount = 0;
-            lastFpsTime = now;
+            frameCount = 0; lastFpsTime = now;
         }
-
         requestAnimationFrame(render);
     }
 
-    // =====================================================
     // STARTUP
-    // =====================================================
     connectWebSocket();
     render();
     </script>
