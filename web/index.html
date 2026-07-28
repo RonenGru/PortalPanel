@@ -144,10 +144,11 @@
 </head>
 <body>
     <!-- Status Bar -->
-        <div id="status-bar">
+            <div id="status-bar">
         <span id="status-text">Connecting...</span>
-        <div style="display: flex; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
             <span id="fps-text">0 fps</span>
+            <div id="monitor-buttons" style="display: flex; gap: 3px;"></div>
             <div id="scale-control">
                 <input type="range" id="scale-slider" min="80" max="200" value="130" step="5">
                 <span id="scale-label">130%</span>
@@ -340,9 +341,116 @@
     document.addEventListener('fullscreenchange', function() {
         fullscreenBtn.textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
     });
-        // SCALE SLIDER
+	
+	    // =====================================================
+    // MONITOR SELECTION - Uses Chrome Window Management API
+    // =====================================================
+    let windowManagementAvailable = false;
+    let screenDetails = null;
+
+    // Check if Window Management API is available
+    if ('getScreenDetails' in window) {
+        windowManagementAvailable = true;
+    }
+
+    async function setupMonitorButtons() {
+        const container = document.getElementById('monitor-buttons');
+        
+        if (windowManagementAvailable) {
+            // Use Chrome Window Management API
+            try {
+                screenDetails = await window.getScreenDetails();
+                
+                screenDetails.screens.forEach((screen, i) => {
+                    const btn = document.createElement('button');
+                    btn.textContent = 'M' + (i + 1);
+                    btn.style.cssText = 'background:#222;border:1px solid #444;color:#0ff;padding:3px 8px;border-radius:3px;font-size:10px;cursor:pointer;font-family:Courier New,monospace;';
+                    btn.onmouseover = () => btn.style.background = '#333';
+                    btn.onmouseout = () => btn.style.background = '#222';
+                    btn.onclick = () => {
+                        // Move to this screen using the Window Management API
+                        try {
+                            // Calculate target position (center of target screen)
+                            var targetX = screen.left + 50;
+                            var targetY = screen.top + 50;
+                            
+                            // Open a popup window on the target screen
+                            var popup = window.open(window.location.href, '_blank', 
+                                'width=' + Math.round(screen.width * 0.85) + 
+                                ',height=' + Math.round(screen.height * 0.85) +
+                                ',left=' + targetX + 
+                                ',top=' + targetY);
+                            
+                            // Close current window if popup opened successfully
+                            if (popup) {
+                                setTimeout(() => {
+                                    try { window.close(); } catch(e) {}
+                                }, 500);
+                            }
+                        } catch(e) {
+                            console.log('Move failed:', e);
+                            alert('Could not move to Monitor ' + (i + 1) + ': ' + e.message);
+                        }
+                    };
+                    container.appendChild(btn);
+                });
+                return;
+            } catch(e) {
+                console.log('Window Management API denied:', e);
+            }
+        }
+        
+        // Fallback: use API data and try window.open as popup
+        try {
+            const response = await fetch('/api/monitors');
+            const data = await response.json();
+            
+            data.monitors.forEach((m, i) => {
+                const btn = document.createElement('button');
+                btn.textContent = 'M' + (i + 1);
+                btn.style.cssText = 'background:#222;border:1px solid #444;color:#aaa;padding:3px 8px;border-radius:3px;font-size:10px;cursor:pointer;font-family:Courier New,monospace;';
+                btn.onmouseover = () => btn.style.background = '#333';
+                btn.onmouseout = () => btn.style.background = '#222';
+                btn.onclick = () => {
+                    // Open as popup on target screen position
+                    var w = Math.round(m.width * 0.85);
+                    var h = Math.round(m.height * 0.85);
+                    var popup = window.open(window.location.href, '_blank',
+                        'width=' + w + ',height=' + h +
+                        ',left=' + (m.x + 50) + ',top=' + (m.y + 50));
+                    
+                    if (popup) {
+                        // Close current window
+                        setTimeout(() => {
+                            try { window.close(); } catch(e) {}
+                        }, 500);
+                    } else {
+                        alert('Popup blocked. Please allow popups for PortalPanel.');
+                    }
+                };
+                container.appendChild(btn);
+            });
+        } catch(err) {
+            console.log('Monitor detection failed:', err);
+        }
+    }
+
+    setupMonitorButtons();
+
+     // SCALE SLIDER - reads from URL parameter if available
     var scaleSlider = document.getElementById('scale-slider');
     var scaleLabel = document.getElementById('scale-label');
+
+    // Read scale from URL parameter (set by launcher)
+    var urlParams = new URLSearchParams(window.location.search);
+    var initialScale = urlParams.get('scale');
+    if (initialScale) {
+        scaleSlider.value = initialScale;
+        scaleLabel.textContent = initialScale + '%';
+        var initScale = parseInt(initialScale) / 100;
+        bezel.style.transform = 'translate(-50%, -50%) scale(' + initScale + ')';
+    }
+
     scaleSlider.addEventListener('input', function() {
         var scale = scaleSlider.value / 100;
         scaleLabel.textContent = scaleSlider.value + '%';

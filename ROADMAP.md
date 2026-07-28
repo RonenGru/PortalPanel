@@ -17,8 +17,8 @@ This document tracks the development goals and progress for PortalPanel, a live 
 - [x] Baro Setting
 
 ### Phase 1 — Polish & Core Features
-- [ ] G1000 bezel styling (realistic Garmin look)
-- [ ] Borderless fullscreen mode
+- [X] G1000 bezel styling (realistic Garmin look)
+- [X] Borderless fullscreen mode
 - [ ] Monitor selection button
 - [ ] Airspeed trend arrow
 - [ ] Altitude trend arrow

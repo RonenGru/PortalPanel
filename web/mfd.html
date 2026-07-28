@@ -134,6 +134,17 @@
     let lastFpsTime = performance.now();
 
     // SCALE SLIDER
+        // Read scale from URL parameter if available
+    var urlParams = new URLSearchParams(window.location.search);
+    var initialScale = urlParams.get('scale');
+    if (initialScale) {
+        scaleSlider.value = initialScale;
+        scaleLabel.textContent = initialScale + '%';
+        var initScale = parseInt(initialScale) / 100;
+        bezel.style.transform = 'scale(' + initScale + ')';
+        bezel.style.transformOrigin = 'center top';
+    }
+
     scaleSlider.addEventListener('input', function() {
         var scale = scaleSlider.value / 100;
         scaleLabel.textContent = scaleSlider.value + '%';

@@ -42,8 +42,11 @@ g_simconnect_active = False
 g_status_message = "Initializing..."
 
 # Final corrected variable list (from our testing)
+# Final corrected variable list (from our testing)
 INSTRUMENT_VARS = {
     # PFD
+    "aircraft_title":        "TITLE",
+    "aircraft_model":        "ATC_MODEL",
     "altitude":              "PLANE_ALTITUDE",
     "airspeed":              "AIRSPEED_INDICATED",
     "vertical_speed":        "VERTICAL_SPEED",
@@ -121,6 +124,18 @@ def convert_units(raw_data):
         if converted.get(key) is not None:
             converted[key] = round(converted[key], 2)
 
+        # Aircraft title
+    if converted.get("aircraft_title") is not None:
+        try:
+            converted["aircraft_title"] = converted["aircraft_title"].strip()
+        except:
+            pass
+    if converted.get("aircraft_model") is not None:
+        try:
+            converted["aircraft_model"] = converted["aircraft_model"].strip()
+        except:
+            pass
+    
     return converted
 
 
@@ -147,6 +162,8 @@ def simconnect_loop():
             if sys.is_finalizing():
                 break
             mock_data = {
+                "aircraft_title": "Cessna Skyhawk 172 G1000",
+                "aircraft_model": "C172",
                 "altitude": mock_altitude, "airspeed": 120,
                 "vertical_speed": 0, "heading_true": 180,
                 "heading_mag": 180, "pitch": 5, "roll": 0,
@@ -163,7 +180,10 @@ def simconnect_loop():
                 "eng_egt": 1250.0, "eng_cht": 300.0,
                 "eng_fuel_flow": 12.0, "fuel_total": 25.8,
                 "fuel_left": 12.9, "fuel_right": 12.9,
-                "bus_voltage": 28.0, "bus_load": 15.0, "vacuum": 5.0,
+                "bus_voltage": 28.0, "bus_load": 15.0, 
+                "vacuum": 5.0,
+                "aircraft_title": "Cessna Skyhawk 172 G1000",
+                "aircraft_model": "C172",
             }
             with g_data_lock:
                 g_instrument_data = mock_data
@@ -269,6 +289,33 @@ def api_status():
         "connected": g_simconnect_active,
         "message": g_status_message
     })
+    
+@app.route("/api/aircraft")
+def api_aircraft():
+    """Return detected aircraft info"""
+    with g_data_lock:
+        data = dict(g_instrument_data)
+    title = data.get("aircraft_title", "Unknown")
+    model = data.get("aircraft_model", "")
+    return jsonify({
+        "title": title,
+        "model": model
+    })
+
+@app.route("/api/monitors")
+def api_monitors():
+    """Return list of available monitors"""
+    try:
+        from screeninfo import get_monitors
+        monitors = []
+        for m in get_monitors():
+            monitors.append({
+                "x": m.x, "y": m.y,
+                "width": m.width, "height": m.height
+            })
+        return jsonify({"monitors": monitors})
+    except Exception as e:
+        return jsonify({"monitors": [], "error": str(e)})   
 
 
 @socketio.on("connect")

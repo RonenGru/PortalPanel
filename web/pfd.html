@@ -209,9 +209,19 @@
         fullscreenBtn.textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
     });
 	
-	    // SCALE SLIDER
+	        // SCALE SLIDER - reads from URL parameter if available
     var scaleSlider = document.getElementById('scale-slider');
     var scaleLabel = document.getElementById('scale-label');
+
+    var urlParams = new URLSearchParams(window.location.search);
+    var initialScale = urlParams.get('scale');
+    if (initialScale) {
+        scaleSlider.value = initialScale;
+        scaleLabel.textContent = initialScale + '%';
+        var initScale = parseInt(initialScale) / 100;
+        bezel.style.transform = 'translate(-50%, -50%) scale(' + initScale + ')';
+    }
+
     scaleSlider.addEventListener('input', function() {
         var scale = scaleSlider.value / 100;
         scaleLabel.textContent = scaleSlider.value + '%';
