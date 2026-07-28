@@ -14,6 +14,9 @@ FIXED VERSION:
   launches silently tried to move a dead window handle and did nothing).
 - g_pending_launch is now protected by a lock, so rapid/overlapping clicks
   on LAUNCH DISPLAY can no longer silently overwrite/drop a request.
+- Title bars are recolored black (Windows 11, build 22000+ only) via the
+  DWM API so they blend with the app's dark UI, without needing frameless
+  windows or any custom close/hide handling.
 """
 import sys
 import os
@@ -324,6 +327,64 @@ def build_display_url(display_type, scale, monitor_index):
     query = urllib.parse.urlencode({"scale": scale, "monitor": monitor_index})
     return "{}{}?{}".format(SERVER_URL, path, query)
 
+# ---- Native title bar coloring (Windows 11, build 22000+ only) -------------
+# Instead of frameless windows (which need custom close/hide handling),
+# we keep the normal window chrome -- title bar, close/maximize buttons,
+# resize -- and just recolor the title bar black so it blends with the
+# app's dark UI. On Windows 10 or non-Windows platforms this silently does
+# nothing; the window just keeps its default title bar.
+DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+DWMWA_CAPTION_COLOR = 35
+DWMWA_TEXT_COLOR = 36
+
+def _rgb_to_colorref(rgb):
+    r, g, b = rgb
+    return r | (g << 8) | (b << 16)  # Win32 COLORREF is 0x00BBGGRR
+
+def set_titlebar_black(window, bg_rgb=(0, 0, 0), text_rgb=(255, 255, 255)):
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except Exception:
+        return
+
+    try:
+        hwnd = window.native.Handle.ToInt32()
+    except Exception as e:
+        print("[LAUNCHER] Could not get native window handle: {}".format(e))
+        return
+
+    def set_attr(attr, value):
+        val = wintypes.DWORD(value)
+        return ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            wintypes.HWND(hwnd), attr, ctypes.byref(val), ctypes.sizeof(val))
+
+    try:
+        set_attr(DWMWA_USE_IMMERSIVE_DARK_MODE, 1)
+        set_attr(DWMWA_CAPTION_COLOR, _rgb_to_colorref(bg_rgb))
+        set_attr(DWMWA_TEXT_COLOR, _rgb_to_colorref(text_rgb))
+    except Exception as e:
+        # Most likely Windows 10 / build < 22000, which doesn't support
+        # DWMWA_CAPTION_COLOR. Not fatal -- just keeps the default title bar.
+        print("[LAUNCHER] Title bar coloring unsupported on this Windows build: {}".format(e))
+
+_titlebar_colored = set()  # tracks which display_types have been colored
+
+def make_loaded_handler(win, display_type, colored_set):
+    """
+    Colors the title bar black the first time this window's content
+    finishes loading (native handle is guaranteed to exist by then).
+    Only runs once per window even though 'loaded' fires again on
+    every later load_url() call.
+    """
+    def handler():
+        if display_type not in colored_set:
+            set_titlebar_black(win)
+            colored_set.add(display_type)
+    return handler
+
 def make_closing_handler(display_type):
     """
     Returns a handler bound to a specific display_type. Instead of letting
@@ -369,6 +430,7 @@ def create_display_window(display_type, scale=130, monitor_index=0, hidden=True)
         hidden=hidden,
     )
     win.events.closing += make_closing_handler(display_type)
+    win.events.loaded += make_loaded_handler(win, display_type, _titlebar_colored)
 
     with g_display_lock:
         g_display_windows[display_type] = win
