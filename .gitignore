@@ -190,3 +190,20 @@ user_data/
 *.odt
 *.docx
 *.pdf
+
+# Generated temp files
+manager/launcher.html
+
+# Virtual environment
+venv/
+
+# Config
+portalpanel_config.json
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+Thumbs.db
+desktop.ini
