@@ -199,16 +199,6 @@ body {{ background: #0a0a0a; color: #ddd; font-family: 'Segoe UI', Arial, sans-s
     <div class="btn-group" id="monitor-group">{monitors}</div>
 </div>
 
-<div class="section">
-    <div class="section-title">Scale</div>
-    <div id="scale-row">
-        <span style="font-size:11px;color:#888">80%</span>
-        <input type="range" id="scale-slider" min="80" max="200" value="130" step="5">
-        <span style="font-size:11px;color:#888">200%</span>
-        <span id="scale-label">130%</span>
-    </div>
-</div>
-
 <button id="launch-btn" onclick="launchDisplay()">LAUNCH DISPLAY</button>
 
 <p class="hint">
@@ -220,7 +210,7 @@ body {{ background: #0a0a0a; color: #ddd; font-family: 'Segoe UI', Arial, sans-s
 <script>
 let selectedDisplay = "combined";
 let selectedMonitor = 0;
-let selectedScale = 130;
+const selectedScale = 130;
 let launchInFlight = false;
 
 document.querySelectorAll('#display-group .display-btn').forEach(btn => {{
@@ -240,12 +230,7 @@ document.querySelectorAll('#monitor-group .monitor-btn').forEach((btn, i) => {{
     }});
 }});
 
-const slider = document.getElementById('scale-slider');
-const scaleLabel = document.getElementById('scale-label');
-slider.addEventListener('input', () => {{
-    selectedScale = parseInt(slider.value);
-    scaleLabel.textContent = selectedScale + '%';
-}});
+// Scale is controlled by the slider on the display page itself
 
 function updateStatus() {{
     fetch('{server_url}/api/status').then(r => r.json()).then(data => {{

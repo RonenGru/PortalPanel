@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #ddd; font-family: 'Segoe UI', Arial, sans-serif; padding: 30px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+#header { text-align: center; margin-bottom: 25px; }
+#header h1 { font-size: 28px; letter-spacing: 4px; }
+.logo-white { color: #fff; } .logo-cyan { color: #00FFFF; }
+#header p { font-size: 11px; color: #555; margin-top: 5px; }
+#status { margin-bottom: 20px; padding: 10px 20px; background: #111; border: 1px solid #333; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 10px; min-width: 400px; justify-content: center; }
+#status-dot { width: 10px; height: 10px; border-radius: 50%; background: #FF8800; box-shadow: 0 0 8px #FF8800; transition: 0.3s; }
+#status-dot.connected { background: #00FF00; box-shadow: 0 0 8px #00FF00; }
+.section { margin-bottom: 20px; width: 450px; }
+.section-title { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+.aircraft-name { background: #111; border: 1px solid #006666; border-radius: 6px; padding: 15px; text-align: center; font-size: 18px; color: #00FFFF; font-weight: bold; }
+.aircraft-name small { display: block; font-size: 11px; color: #888; font-weight: normal; margin-top: 5px; }
+.btn-group { display: flex; gap: 8px; }
+.display-btn, .monitor-btn { flex: 1; padding: 15px 10px; font-size: 12px; font-weight: bold; background: #1a1a1a; color: #ddd; border: 2px solid #333; border-radius: 6px; cursor: pointer; transition: 0.2s; text-align: center; }
+.display-btn:hover, .monitor-btn:hover { border-color: #00FFFF; color: #00FFFF; }
+.display-btn.active { background: #003344; border-color: #00FFFF; color: #00FFFF; }
+.monitor-btn.active { background: #002200; border-color: #00FF00; color: #00FF00; }
+.display-btn small, .monitor-btn small { display: block; font-size: 9px; color: #666; font-weight: normal; margin-top: 3px; }
+#scale-row { display: flex; align-items: center; gap: 10px; padding: 10px; background: #111; border: 1px solid #333; border-radius: 6px; }
+#scale-slider { flex: 1; cursor: pointer; }
+#scale-label { font-size: 14px; color: #00FFFF; font-weight: bold; min-width: 50px; text-align: right; }
+#launch-btn { margin-top: 10px; padding: 18px; width: 450px; font-size: 16px; font-weight: bold; letter-spacing: 2px; background: #003344; color: #00FFFF; border: 2px solid #00FFFF; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+#launch-btn:hover { background: #00FFFF; color: #000; box-shadow: 0 0 20px #00FFFF; }
+#launch-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.hint { font-size: 10px; color: #555; margin-top: 15px; text-align: center; max-width: 450px; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<div id="header">
+    <h1><span class="logo-white">PORTAL</span><span class="logo-cyan">PANEL</span></h1>
+    <p>Live Instrument Display for MSFS 2024</p>
+</div>
+
+<div id="status">
+    <span id="status-dot"></span>
+    <span id="status-text">Starting server...</span>
+</div>
+
+<div class="section">
+    <div class="section-title">Detected Aircraft</div>
+    <div class="aircraft-name" id="aircraft-name">Detecting...<small id="aircraft-model">Waiting for MSFS</small></div>
+</div>
+
+<div class="section">
+    <div class="section-title">Select Display</div>
+    <div class="btn-group" id="display-group">
+        <button class="display-btn active" data-display="combined">Combined<small>PFD + MFD</small></button>
+        <button class="display-btn" data-display="pfd">PFD Only<small>Primary Flight</small></button>
+        <button class="display-btn" data-display="mfd">MFD Only<small>Multi-Function</small></button>
+    </div>
+</div>
+
+<div class="section">
+    <div class="section-title">Select Monitor</div>
+    <div class="btn-group" id="monitor-group"><button class="monitor-btn" data-monitor="0">Monitor 1<br><small>1920x1080</small></button><button class="monitor-btn" data-monitor="1">Monitor 2<br><small>1920x1080</small></button></div>
+</div>
+
+<button id="launch-btn" onclick="launchDisplay()">LAUNCH DISPLAY</button>
+
+<p class="hint">
+    Click LAUNCH to open the instrument panel on your chosen monitor.<br>
+    Click LAUNCH again to move an existing display to a different monitor.<br>
+    You can open Combined, PFD, and MFD simultaneously on different monitors.
+</p>
+
+<script>
+let selectedDisplay = "combined";
+let selectedMonitor = 0;
+const selectedScale = 130;
+let launchInFlight = false;
+
+document.querySelectorAll('#display-group .display-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#display-group .display-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedDisplay = btn.dataset.display;
+    });
+});
+
+document.querySelectorAll('#monitor-group .monitor-btn').forEach((btn, i) => {
+    if (i === 0) btn.classList.add('active');
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#monitor-group .monitor-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedMonitor = parseInt(btn.dataset.monitor);
+    });
+});
+
+// Scale is controlled by the slider on the display page itself
+
+function updateStatus() {
+    fetch('http://127.0.0.1:8090/api/status').then(r => r.json()).then(data => {
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('status-text');
+        if (data.connected) {
+            dot.classList.add('connected');
+            text.textContent = 'Connected to MSFS';
+        } else {
+            dot.classList.remove('connected');
+            text.textContent = data.message || 'Waiting for MSFS...';
+        }
+    }).catch(() => {
+        document.getElementById('status-text').textContent = 'Server starting...';
+    });
+    fetch('http://127.0.0.1:8090/api/aircraft').then(r => r.json()).then(data => {
+        if (data.title && data.title !== 'Unknown') {
+            document.getElementById('aircraft-name').firstChild.textContent = data.title;
+            document.getElementById('aircraft-model').textContent = 'Model: ' + (data.model || 'Unknown');
+        }
+    }).catch(() => {});
+}
+setInterval(updateStatus, 2000);
+updateStatus();
+
+function launchDisplay() {
+    // Guard against double-clicks piling up requests faster than the
+    // native side can process them.
+    if (launchInFlight) return;
+    launchInFlight = true;
+
+    const btn = document.getElementById('launch-btn');
+    btn.disabled = true;
+    btn.textContent = 'LAUNCHING...';
+    window.pywebview.api.launch_display(selectedDisplay, selectedMonitor, selectedScale).then(result => {
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = 'LAUNCH DISPLAY';
+            launchInFlight = false;
+        }, 1000);
+    }).catch(() => {
+        btn.disabled = false;
+        btn.textContent = 'LAUNCH DISPLAY';
+        launchInFlight = false;
+    });
+}
+</script>
+</body>
+</html>
