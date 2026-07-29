@@ -70,6 +70,10 @@ INSTRUMENT_VARS = {
     "nav2_dme":              "NAV_DME:2",
     "gps_ground_speed":      "GPS_GROUND_SPEED",
     "gps_magvar":            "GPS_MAGVAR",
+    # Weather
+    "oat":                  "AMBIENT_TEMPERATURE",
+    "wind_dir":             "AMBIENT_WIND_DIRECTION",
+    "wind_speed":            "AMBIENT_WIND_VELOCITY",
     # MFD - Engine
     "eng_rpm":               "GENERAL_ENG_RPM:1",
     "eng_manifold_press":    "RECIP_ENG_MANIFOLD_PRESSURE:1",
@@ -99,10 +103,13 @@ def convert_units(raw_data):
     if converted.get("roll") is not None:
         converted["roll"] = round(converted["roll"] * 57.2958, 2)
 
-    # Temperature: Rankine -> Fahrenheit
+        # Temperature: Rankine -> Fahrenheit
     for key in ["eng_oil_temp", "eng_egt", "eng_cht"]:
         if converted.get(key) is not None:
             converted[key] = round(converted[key] - 459.67, 1)
+        # OAT: Celsius -> Fahrenheit (MSFS 2024 returns ambient temp in Celsius)
+    if converted.get("oat") is not None:
+        converted["oat"] = round(converted["oat"] * 9 / 5 + 32, 0)
 
     # Oil pressure: Pascals -> PSI
     if converted.get("eng_oil_pressure") is not None:
@@ -110,14 +117,15 @@ def convert_units(raw_data):
             converted["eng_oil_pressure"] / 6894.76, 1)
 
     # Round common values for cleaner display
-    for key in ["altitude", "airspeed", "heading_true", "heading_mag",
+        for key in ["altitude", "airspeed", "heading_true", "heading_mag",
                 "vertical_speed", "baro_pressure", "turn_rate", "slip_ball",
                 "nav1_dme", "nav2_dme", "gps_ground_speed", "gps_magvar",
+                "wind_dir", "wind_speed",
                 "eng_rpm", "eng_manifold_press", "eng_fuel_flow", "fuel_total",
                 "fuel_left", "fuel_right", "bus_voltage", "bus_load",
                 "vacuum"]:
-        if converted.get(key) is not None and isinstance(converted[key], float):
-            converted[key] = round(converted[key], 2)
+            if converted.get(key) is not None and isinstance(converted[key], float):
+                converted[key] = round(converted[key], 2)
 
     # Format NAV frequencies nicely
     for key in ["nav1_freq", "nav1_stby_freq", "nav2_freq", "nav2_stby_freq"]:
@@ -175,6 +183,7 @@ def simconnect_loop():
                 "nav2_freq": 110.50, "nav2_stby_freq": 113.90,
                 "nav2_signal": 0, "nav2_dme": 0,
                 "gps_ground_speed": 120, "gps_magvar": 0,
+                "oat": 15.0, "wind_dir": 270, "wind_speed": 10,
                 "eng_rpm": 2300, "eng_manifold_press": 23.0,
                 "eng_oil_temp": 168.0, "eng_oil_pressure": 50.0,
                 "eng_egt": 1250.0, "eng_cht": 300.0,

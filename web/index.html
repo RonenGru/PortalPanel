@@ -168,9 +168,17 @@
                 <div class="label">NAV2</div>
                 <div class="value" id="info-nav2">---.--</div>
             </div>
-            <div class="info-box">
+                        <div class="info-box">
                 <div class="label">BARO</div>
                 <div class="value" id="info-baro">----</div>
+            </div>
+            <div class="info-box">
+                <div class="label">OAT</div>
+                <div class="value" id="info-oat">--°F</div>
+            </div>
+            <div class="info-box" id="wind-box" style="display:none;">
+                <div class="label">WIND</div>
+                <div class="value" id="info-wind" style="font-size:11px;">---°/--kt</div>
             </div>
         </div>
 
@@ -251,6 +259,8 @@
     const SMOOTH_FACTOR = 0.5;
     let frameCount = 0;
     let lastFpsTime = performance.now();
+	let prevAirspeed = null;
+    let prevAirspeedTime = null;
 
     // =====================================================
     // WEBSOCKET
@@ -287,10 +297,35 @@
     // =====================================================
     // UPDATE LEFT INFO (NAV1, NAV2, BARO)
     // =====================================================
-    function updateSideInfo() {
+        function updateSideInfo() {
         document.getElementById('info-nav1').textContent = d.nav1_freq ? d.nav1_freq.toFixed(2) : '---.--';
         document.getElementById('info-nav2').textContent = d.nav2_freq ? d.nav2_freq.toFixed(2) : '---.--';
         document.getElementById('info-baro').textContent = d.baro_pressure ? d.baro_pressure.toFixed(1) : '----';
+        // OAT
+        var oatEl = document.getElementById('info-oat');
+        if (oatEl) {
+            if (d.oat !== null && d.oat !== undefined) {
+                oatEl.textContent = Math.round(d.oat) + '°F';
+            } else {
+                oatEl.textContent = '--°F';
+            }
+        }
+        // Wind
+        var windEl = document.getElementById('info-wind');
+        var windBox = document.getElementById('wind-box');
+        if (windEl && windBox) {
+            if (d.wind_dir !== null && d.wind_dir !== undefined && d.wind_speed !== null && d.wind_speed !== undefined) {
+                var windAngle = Math.round(d.wind_dir);
+                // Show as magnetic heading (subtract magvar if available)
+                if (d.gps_magvar) {
+                    windAngle = Math.round(d.wind_dir - d.gps_magvar);
+                    if (windAngle < 0) windAngle += 360;
+                    if (windAngle >= 360) windAngle -= 360;
+                }
+                windEl.textContent = windAngle + '°/' + Math.round(d.wind_speed) + 'kt';
+                windBox.style.display = '';
+            }
+        }
     }
 
     // =====================================================
@@ -457,29 +492,69 @@
     // DRAW AIRSPEED TAPE
     // =====================================================
     function drawAirspeedTape() {
-        var as = smooth.airspeed || 0;
-        var x = 20, tapeTop = 100, tapeBottom = 500;
-        var tapeMid = (tapeTop + tapeBottom) / 2;
-        var range = 40, pxPerKt = (tapeBottom - tapeTop) / (range * 2);
-        ctx.fillStyle = '#111'; ctx.fillRect(x, tapeTop, 80, tapeBottom - tapeTop);
-        ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2;
-        ctx.strokeRect(x, tapeTop, 80, tapeBottom - tapeTop);
-        ctx.save();
-        ctx.beginPath(); ctx.rect(x, tapeTop, 80, tapeBottom - tapeTop); ctx.clip();
-        ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial'; ctx.textAlign = 'right';
-        for (var kt = Math.floor(as - range); kt <= Math.ceil(as + range); kt += 10) {
-            var y = tapeMid - (kt - as) * pxPerKt;
-            if (y < tapeTop || y > tapeBottom) continue;
-            var len = (kt % 10 === 0) ? 20 : 10;
-            ctx.beginPath(); ctx.moveTo(x + 80, y); ctx.lineTo(x + 80 - len, y); ctx.stroke();
-            if (kt % 10 === 0) ctx.fillText(kt + '', x + 78, y + 4);
-        }
-        ctx.restore();
-        ctx.fillStyle = '#000'; ctx.fillRect(x - 5, tapeMid - 15, 90, 30);
-        ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
-        ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'right';
-        ctx.fillText(Math.round(as) + '', x + 80, tapeMid + 6);
+    var as = smooth.airspeed || 0;
+    var x = 20, tapeTop = 100, tapeBottom = 500;
+    var tapeMid = (tapeTop + tapeBottom) / 2;
+    var range = 40, pxPerKt = (tapeBottom - tapeTop) / (range * 2);
+    ctx.fillStyle = '#111'; ctx.fillRect(x, tapeTop, 80, tapeBottom - tapeTop);
+    ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2;
+    ctx.strokeRect(x, tapeTop, 80, tapeBottom - tapeTop);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x, tapeTop, 80, tapeBottom - tapeTop); ctx.clip();
+    ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial'; ctx.textAlign = 'right';
+    for (var kt = Math.floor(as - range); kt <= Math.ceil(as + range); kt += 10) {
+        var y = tapeMid - (kt - as) * pxPerKt;
+        if (y < tapeTop || y > tapeBottom) continue;
+        var len = (kt % 10 === 0) ? 20 : 10;
+        ctx.beginPath(); ctx.moveTo(x + 80, y); ctx.lineTo(x + 80 - len, y); ctx.stroke();
+        if (kt % 10 === 0) ctx.fillText(kt + '', x + 78, y + 4);
     }
+    ctx.restore();
+    ctx.fillStyle = '#000'; ctx.fillRect(x - 5, tapeMid - 15, 90, 30);
+    ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
+    ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'right';
+    ctx.fillText(Math.round(as) + '', x + 80, tapeMid + 6);
+
+    // Airspeed trend arrow (magenta) — predicts speed in 6 seconds
+    var now = performance.now();
+    if (prevAirspeed !== null && prevAirspeedTime !== null) {
+        var dt = (now - prevAirspeedTime) / 1000;
+        if (dt > 0.25) {   // sample every 250ms+, not every frame
+            var rate = (smooth.airspeed - prevAirspeed) / dt;
+            var trendKt = smooth.airspeed + rate * 6;
+            var trendY = tapeMid - (trendKt - as) * pxPerKt;
+            trendY = Math.max(tapeTop + 10, Math.min(tapeBottom - 10, trendY));
+
+            if (Math.abs(trendY - tapeMid) > 2) {
+                ctx.strokeStyle = '#FF00FF'; ctx.fillStyle = '#FF00FF'; ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x + 80, tapeMid - 15);
+                ctx.lineTo(x + 80, trendY);
+                ctx.stroke();
+
+                ctx.beginPath();
+                if (trendY < tapeMid) {
+                    ctx.moveTo(x + 80, trendY);
+                    ctx.lineTo(x + 75, trendY + 8);
+                    ctx.lineTo(x + 85, trendY + 8);
+                } else {
+                    ctx.moveTo(x + 80, trendY);
+                    ctx.lineTo(x + 75, trendY - 8);
+                    ctx.lineTo(x + 85, trendY - 8);
+                }
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // Only reset the sample point when we actually sampled
+            prevAirspeed = smooth.airspeed;
+            prevAirspeedTime = now;
+        }
+    } else {
+        prevAirspeed = smooth.airspeed;
+        prevAirspeedTime = now;
+    }
+}
 
     // =====================================================
     // DRAW ALTITUDE TAPE
