@@ -85,7 +85,11 @@ def start_server():
     print("[LAUNCHER] Starting PortalPanel server...")
     proc = subprocess.Popen(
         [sys.executable, SERVER_SCRIPT],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=BASE_DIR
+        cwd=BASE_DIR
+        # No stdout/stderr redirection -- let the child inherit this
+        # console directly, so all of portalpanel_server.py's prints
+        # (SimConnect connect/retry messages, Flask request logs, etc.)
+        # actually show up here instead of vanishing into an unread pipe.
     )
     for i in range(30):
         time.sleep(1)
@@ -116,13 +120,23 @@ def detect_aircraft():
                 with urllib.request.urlopen(req, timeout=2.0) as r:
                     data = json.loads(r.read().decode("utf-8"))
                     title = data.get("title", "Unknown")
+                    model = data.get("model", "")
+                    
+                    # Continually update. If MSFS disconnects (returning 'Unknown'), we reset.
                     if title and title != "Unknown":
                         g_aircraft_title = title
-                        g_aircraft_model = data.get("model", "")
-                        break
-        except:
-            pass
-        time.sleep(2)
+                        g_aircraft_model = model
+                    else:
+                        g_aircraft_title = "Detecting..."
+                        g_aircraft_model = "Waiting for MSFS"
+            else:
+                g_aircraft_title = "Detecting..."
+                g_aircraft_model = "Waiting for MSFS"
+        except Exception:
+            g_aircraft_title = "Detecting..."
+            g_aircraft_model = "Waiting for MSFS"
+            
+        time.sleep(2) # Keep polling every 2 seconds
 
 def get_monitors_html():
     try:
@@ -236,7 +250,10 @@ document.querySelectorAll('#monitor-group .monitor-btn').forEach((btn, i) => {{
 // Scale is controlled by the slider on the display page itself
 
 function updateStatus() {{
-    fetch('{server_url}/api/status').then(r => r.json()).then(data => {{
+    const timestamp = Date.now();
+    
+    // Appended ?t=timestamp cache-buster to force WebView2 to fetch fresh SimConnect states on every poll
+    fetch('{server_url}/api/status?t=' + timestamp).then(r => r.json()).then(data => {{
         const dot = document.getElementById('status-dot');
         const text = document.getElementById('status-text');
         if (data.connected) {{
@@ -249,12 +266,22 @@ function updateStatus() {{
     }}).catch(() => {{
         document.getElementById('status-text').textContent = 'Server starting...';
     }});
-    fetch('{server_url}/api/aircraft').then(r => r.json()).then(data => {{
+    
+    // Appended ?t=timestamp cache-buster to force fresh aircraft updates
+    fetch('{server_url}/api/aircraft?t=' + timestamp).then(r => r.json()).then(data => {{
         if (data.title && data.title !== 'Unknown') {{
             document.getElementById('aircraft-name').firstChild.textContent = data.title;
             document.getElementById('aircraft-model').textContent = 'Model: ' + (data.model || 'Unknown');
+        }} else {{
+            // Actively reset the visual text fields when no aircraft is detected
+            document.getElementById('aircraft-name').firstChild.textContent = 'Detecting...';
+            document.getElementById('aircraft-model').textContent = 'Waiting for MSFS';
         }}
-    }}).catch(() => {{}});
+    }}).catch(() => {{
+        // Reset fields if the server goes completely offline
+        document.getElementById('aircraft-name').firstChild.textContent = 'Detecting...';
+        document.getElementById('aircraft-model').textContent = 'Waiting for MSFS';
+    }});
 }}
 setInterval(updateStatus, 2000);
 updateStatus();
@@ -542,7 +569,7 @@ def main():
     api = LauncherAPI()
     launcher_window = webview.create_window(
         title="PortalPanel Launcher",
-        url=html_path,
+        url="http://127.0.0.1:8090/launcher", # Changed to server-hosted URL
         width=550,
         height=700,
         resizable=False,

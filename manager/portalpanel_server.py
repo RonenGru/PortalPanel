@@ -42,7 +42,6 @@ g_simconnect_active = False
 g_status_message = "Initializing..."
 
 # Final corrected variable list (from our testing)
-# Final corrected variable list (from our testing)
 INSTRUMENT_VARS = {
     # PFD
     "aircraft_title":        "TITLE",
@@ -93,6 +92,28 @@ INSTRUMENT_VARS = {
 }
 
 
+def to_display_str(value, default="Unknown"):
+    """
+    Safely convert a SimConnect value to a clean, JSON-serializable display
+    string. Some SimConnect wrapper calls return `bytes` instead of `str`
+    for string simvars (e.g. TITLE, ATC_MODEL) -- bytes objects also have
+    a .strip() method, so a naive .strip() "succeeds" but silently leaves
+    the value as bytes, which later blows up jsonify() with:
+    "TypeError: Object of type bytes is not JSON serializable".
+    """
+    if value is None:
+        return default
+    if isinstance(value, bytes):
+        try:
+            return value.decode("utf-8", errors="ignore").strip()
+        except Exception:
+            return default
+    try:
+        return str(value).strip()
+    except Exception:
+        return default
+
+
 def convert_units(raw_data):
     """Convert MSFS internal units to display-friendly values"""
     converted = dict(raw_data)
@@ -103,48 +124,53 @@ def convert_units(raw_data):
     if converted.get("roll") is not None:
         converted["roll"] = round(converted["roll"] * 57.2958, 2)
 
-        # Temperature: Rankine -> Fahrenheit
+    # Temperature: Rankine -> Fahrenheit
     for key in ["eng_oil_temp", "eng_egt", "eng_cht"]:
         if converted.get(key) is not None:
             converted[key] = round(converted[key] - 459.67, 1)
-        # OAT: Celsius -> Fahrenheit (MSFS 2024 returns ambient temp in Celsius)
+
+    # OAT: Celsius -> Fahrenheit (MSFS 2024 returns ambient temp in Celsius)
     if converted.get("oat") is not None:
         converted["oat"] = round(converted["oat"] * 9 / 5 + 32, 0)
 
     # Oil pressure: Pascals -> PSI
     if converted.get("eng_oil_pressure") is not None:
-        converted["eng_oil_pressure"] = round(
-            converted["eng_oil_pressure"] / 6894.76, 1)
+        converted["eng_oil_pressure"] = round(converted["eng_oil_pressure"] / 6894.76, 1)
 
     # Round common values for cleaner display
-        for key in ["altitude", "airspeed", "heading_true", "heading_mag",
-                "vertical_speed", "baro_pressure", "turn_rate", "slip_ball",
-                "nav1_dme", "nav2_dme", "gps_ground_speed", "gps_magvar",
-                "wind_dir", "wind_speed",
-                "eng_rpm", "eng_manifold_press", "eng_fuel_flow", "fuel_total",
-                "fuel_left", "fuel_right", "bus_voltage", "bus_load",
-                "vacuum"]:
-            if converted.get(key) is not None and isinstance(converted[key], float):
-                converted[key] = round(converted[key], 2)
+    for key in ["altitude", "airspeed", "heading_true", "heading_mag",
+            "vertical_speed", "baro_pressure", "turn_rate", "slip_ball",
+            "nav1_dme", "nav2_dme", "gps_ground_speed", "gps_magvar",
+            "wind_dir", "wind_speed",
+            "eng_rpm", "eng_manifold_press", "eng_fuel_flow", "fuel_total",
+            "fuel_left", "fuel_right", "bus_voltage", "bus_load",
+            "vacuum"]:
+        if converted.get(key) is not None and isinstance(converted[key], float):
+            converted[key] = round(converted[key], 2)
 
     # Format NAV frequencies nicely
     for key in ["nav1_freq", "nav1_stby_freq", "nav2_freq", "nav2_stby_freq"]:
         if converted.get(key) is not None:
             converted[key] = round(converted[key], 2)
 
-        # Aircraft title
-    if converted.get("aircraft_title") is not None:
-        try:
-            converted["aircraft_title"] = converted["aircraft_title"].strip()
-        except:
-            pass
-    if converted.get("aircraft_model") is not None:
-        try:
-            converted["aircraft_model"] = converted["aircraft_model"].strip()
-        except:
-            pass
-    
+    # Aircraft title / model -- always normalize to a clean JSON-safe string,
+    # handling the bytes-vs-str SimConnect quirk described above.
+    converted["aircraft_title"] = to_display_str(converted.get("aircraft_title"))
+    converted["aircraft_model"] = to_display_str(converted.get("aircraft_model"), default="")
+
     return converted
+
+
+# =====================================================================
+# GLOBAL CORS HEADERS DECORATOR
+# =====================================================================
+@app.after_request
+def add_cors_headers(response):
+    """Injects standard CORS headers to bypass local file Webview2 security blocks."""
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type,Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    return response
 
 
 def read_instrument_data(ar):
@@ -189,10 +215,8 @@ def simconnect_loop():
                 "eng_egt": 1250.0, "eng_cht": 300.0,
                 "eng_fuel_flow": 12.0, "fuel_total": 25.8,
                 "fuel_left": 12.9, "fuel_right": 12.9,
-                "bus_voltage": 28.0, "bus_load": 15.0, 
+                "bus_voltage": 28.0, "bus_load": 15.0,
                 "vacuum": 5.0,
-                "aircraft_title": "Cessna Skyhawk 172 G1000",
-                "aircraft_model": "C172",
             }
             with g_data_lock:
                 g_instrument_data = mock_data
@@ -220,26 +244,32 @@ def simconnect_loop():
                 g_simconnect_active = True
                 g_status_message = "Connected to MSFS"
                 print("[SIMCONNECT] Connected!")
-
             raw_data = read_instrument_data(ar)
+            
+            # Check for silent disconnect: if core variables return None,
+            # MSFS has likely closed but SimConnect didn't throw an error.
+            if raw_data.get("altitude") is None and raw_data.get("airspeed") is None:
+                raise Exception("MSFS data stream lost (silent disconnect)")
+                
             converted = convert_units(raw_data)
-
             with g_data_lock:
                 g_instrument_data = converted
-
             # PUSH data to all connected browsers immediately
             socketio.emit("instrument_data", {
                 "status": g_status_message,
                 "connected": g_simconnect_active,
                 "data": converted
             })
-
             time.sleep(DATA_REFRESH_MS / 1000.0)
-
         except Exception as e:
             g_simconnect_active = False
             g_status_message = "MSFS not connected. Waiting..."
             print("[SIMCONNECT] Error: {}. Retrying in 3s...".format(e))
+            
+            # Clear the instrument data so aircraft detection resets
+            with g_data_lock:
+                g_instrument_data = {}
+                
             socketio.emit("instrument_data", {
                 "status": g_status_message,
                 "connected": False,
@@ -259,6 +289,15 @@ def index():
         return send_from_directory(WEB_DIR, "index.html")
     except FileNotFoundError:
         return "ERROR: index.html not found in {}".format(WEB_DIR), 404
+
+
+@app.route("/launcher")
+def serve_launcher():
+    """Serves the launcher UI page directly from the server to bypass local file security blocks."""
+    try:
+        return send_from_directory(BASE_DIR, "launcher.html")
+    except FileNotFoundError:
+        return "ERROR: launcher.html not found in {}".format(BASE_DIR), 404
 
 
 @app.route("/pfd")
@@ -294,22 +333,26 @@ def api_data():
 @app.route("/api/status")
 def api_status():
     """Simple status endpoint"""
-    return jsonify({
+    resp = jsonify({
         "connected": g_simconnect_active,
         "message": g_status_message
     })
-    
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.route("/api/aircraft")
 def api_aircraft():
     """Return detected aircraft info"""
     with g_data_lock:
         data = dict(g_instrument_data)
-    title = data.get("aircraft_title", "Unknown")
-    model = data.get("aircraft_model", "")
-    return jsonify({
-        "title": title,
-        "model": model
+    resp = jsonify({
+        "title": to_display_str(data.get("aircraft_title")),
+        "model": to_display_str(data.get("aircraft_model"), default="")
     })
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
 
 @app.route("/api/monitors")
 def api_monitors():
@@ -324,7 +367,7 @@ def api_monitors():
             })
         return jsonify({"monitors": monitors})
     except Exception as e:
-        return jsonify({"monitors": [], "error": str(e)})   
+        return jsonify({"monitors": [], "error": str(e)})
 
 
 @socketio.on("connect")
