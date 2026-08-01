@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PortalPanel MFD</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@^4/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@^4/dist/maplibre-gl.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -17,7 +19,6 @@
             align-items: flex-start;
             min-height: 100vh;
         }
-
         /* STATUS BAR */
         #status-bar {
             position: fixed; top: 0; left: 0; right: 0;
@@ -36,7 +37,6 @@
             cursor: pointer; font-family: 'Courier New', monospace; margin-left: 10px;
         }
         #fullscreen-btn:hover { background: #333; color: #fff; }
-
         /* SCALE SLIDER */
         #scale-control {
             display: flex; align-items: center; gap: 8px; margin-left: 10px;
@@ -45,7 +45,6 @@
             width: 80px; cursor: pointer;
         }
         #scale-label { font-size: 9px; color: #888; min-width: 35px; }
-
         /* BEZEL */
         #bezel {
             background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
@@ -55,6 +54,69 @@
             padding: 8px;
             margin-top: 35px;
         }
+        /* VIEW TABS */
+        #view-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .view-tab {
+            flex: 1;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: bold;
+            background: #1a1a1a;
+            color: #666;
+            border: 2px solid #333;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+        }
+        .view-tab:hover {
+            background: #2a2a2a;
+            color: #aaa;
+        }
+        .view-tab.active {
+            background: #003344;
+            color: #00FFFF;
+            border-color: #00FFFF;
+        }
+        /* MAP MODE SUB-TABS (Vector vs Tiles) */
+        #map-mode-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .mode-tab {
+            flex: 1;
+            padding: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            background: #151515;
+            color: #555;
+            border: 1px solid #2a2a2a;
+            border-radius: 4px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 1px;
+        }
+        .mode-tab:hover {
+            background: #222;
+            color: #999;
+        }
+        .mode-tab.active {
+            background: #002233;
+            color: #00CCCC;
+            border-color: #00CCCC;
+        }
+        /* ENGINE VIEW */
+        #engine-view { display: block; }
+        #map-view { display: none; }
         #mfd-container { padding: 20px; width: 600px; }
         .section {
             background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 4px;
@@ -70,6 +132,63 @@
         .data-value { color: #00FF66; font-weight: bold; }
         .data-value.warn { color: #FF8800; }
         .data-value.crit { color: #FF0000; }
+        /* MAP VIEW */
+        #map-container {
+            padding: 10px;
+            width: 600px;
+        }
+        #vector-map-container { display: block; }
+        #tile-map-container {
+            display: none;
+            position: relative;
+            width: 560px;
+            height: 500px;
+            border: 1px solid #003300;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        #tile-map {
+            width: 100%;
+            height: 100%;
+        }
+        /* Fixed aircraft icon overlay for tile map -- the map itself pans
+           and rotates underneath this, so the icon always stays centered
+           and pointing up, matching the track-up vector map's behavior. */
+        #tile-aircraft-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 18px solid #FFFF00;
+            transform: translate(-50%, -60%);
+            pointer-events: none;
+            z-index: 10;
+            filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000);
+        }
+        #map-canvas {
+            display: block;
+            background: #001100;
+            border: 1px solid #003300;
+            border-radius: 4px;
+        }
+        #map-info {
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            font-size: 13px;
+            color: #00FF66;
+        }
+        .map-info-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+        }
+        .map-info-label { font-size: 9px; color: #666; }
+        .map-info-value { font-size: 14px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -84,43 +203,92 @@
             <button id="fullscreen-btn">Fullscreen</button>
         </div>
     </div>
-
     <div id="bezel">
-        <div id="mfd-container">
-            <div class="section">
-                <div class="section-title">ENGINE</div>
-                <div class="data-row"><span class="data-label">RPM</span><span class="data-value" id="val-rpm">---</span></div>
-                <div class="data-row"><span class="data-label">MAP (inHg)</span><span class="data-value" id="val-map">---</span></div>
-                <div class="data-row"><span class="data-label">Fuel Flow (GPH)</span><span class="data-value" id="val-fuel-flow">---</span></div>
+        <!-- VIEW TABS -->
+        <div id="view-tabs">
+            <div class="view-tab active" id="tab-engine" onclick="switchView('engine')">ENGINE</div>
+            <div class="view-tab" id="tab-map" onclick="switchView('map')">MAP</div>
+        </div>
+        
+        <!-- ENGINE VIEW -->
+        <div id="engine-view">
+            <div id="mfd-container">
+                <div class="section">
+                    <div class="section-title">ENGINE</div>
+                    <div class="data-row"><span class="data-label">RPM</span><span class="data-value" id="val-rpm">---</span></div>
+                    <div class="data-row"><span class="data-label">MAP (inHg)</span><span class="data-value" id="val-map">---</span></div>
+                    <div class="data-row"><span class="data-label">Fuel Flow (GPH)</span><span class="data-value" id="val-fuel-flow">---</span></div>
+                </div>
+                <div class="section">
+                    <div class="section-title">ENGINE TEMPERATURES</div>
+                    <div class="data-row"><span class="data-label">Oil Temp (F)</span><span class="data-value" id="val-oil-temp">---</span></div>
+                    <div class="data-row"><span class="data-label">Oil Press (PSI)</span><span class="data-value" id="val-oil-press">---</span></div>
+                    <div class="data-row"><span class="data-label">EGT (F)</span><span class="data-value" id="val-egt">---</span></div>
+                    <div class="data-row"><span class="data-label">CHT (F)</span><span class="data-value" id="val-cht">---</span></div>
+                </div>
+                <div class="section">
+                    <div class="section-title">FUEL</div>
+                    <div class="data-row"><span class="data-label">Total (gal)</span><span class="data-value" id="val-fuel-total">---</span></div>
+                    <div class="data-row"><span class="data-label">Left (gal)</span><span class="data-value" id="val-fuel-left">---</span></div>
+                    <div class="data-row"><span class="data-label">Right (gal)</span><span class="data-value" id="val-fuel-right">---</span></div>
+                </div>
+                <div class="section">
+                    <div class="section-title">ELECTRICAL / VACUUM</div>
+                    <div class="data-row"><span class="data-label">Bus Voltage</span><span class="data-value" id="val-voltage">---</span></div>
+                    <div class="data-row"><span class="data-label">Bus Load (A)</span><span class="data-value" id="val-load">---</span></div>
+                    <div class="data-row"><span class="data-label">Vacuum (inHg)</span><span class="data-value" id="val-vacuum">---</span></div>
+                </div>
+                <div class="section">
+                    <div class="section-title">POSITION</div>
+                    <div class="data-row"><span class="data-label">Latitude</span><span class="data-value" id="val-lat">---</span></div>
+                    <div class="data-row"><span class="data-label">Longitude</span><span class="data-value" id="val-lon">---</span></div>
+                    <div class="data-row"><span class="data-label">Ground Speed</span><span class="data-value" id="val-gs">---</span></div>
+                </div>
             </div>
-            <div class="section">
-                <div class="section-title">ENGINE TEMPERATURES</div>
-                <div class="data-row"><span class="data-label">Oil Temp (F)</span><span class="data-value" id="val-oil-temp">---</span></div>
-                <div class="data-row"><span class="data-label">Oil Press (PSI)</span><span class="data-value" id="val-oil-press">---</span></div>
-                <div class="data-row"><span class="data-label">EGT (F)</span><span class="data-value" id="val-egt">---</span></div>
-                <div class="data-row"><span class="data-label">CHT (F)</span><span class="data-value" id="val-cht">---</span></div>
-            </div>
-            <div class="section">
-                <div class="section-title">FUEL</div>
-                <div class="data-row"><span class="data-label">Total (gal)</span><span class="data-value" id="val-fuel-total">---</span></div>
-                <div class="data-row"><span class="data-label">Left (gal)</span><span class="data-value" id="val-fuel-left">---</span></div>
-                <div class="data-row"><span class="data-label">Right (gal)</span><span class="data-value" id="val-fuel-right">---</span></div>
-            </div>
-            <div class="section">
-                <div class="section-title">ELECTRICAL / VACUUM</div>
-                <div class="data-row"><span class="data-label">Bus Voltage</span><span class="data-value" id="val-voltage">---</span></div>
-                <div class="data-row"><span class="data-label">Bus Load (A)</span><span class="data-value" id="val-load">---</span></div>
-                <div class="data-row"><span class="data-label">Vacuum (inHg)</span><span class="data-value" id="val-vacuum">---</span></div>
-            </div>
-            <div class="section">
-                <div class="section-title">POSITION</div>
-                <div class="data-row"><span class="data-label">Latitude</span><span class="data-value" id="val-lat">---</span></div>
-                <div class="data-row"><span class="data-label">Longitude</span><span class="data-value" id="val-lon">---</span></div>
-                <div class="data-row"><span class="data-label">Ground Speed</span><span class="data-value" id="val-gs">---</span></div>
+        </div>
+
+        <!-- MAP VIEW -->
+        <div id="map-view">
+            <div id="map-container">
+                <div id="map-mode-tabs">
+                    <div class="mode-tab active" id="mode-vector" onclick="switchMapMode('vector')">VECTOR</div>
+                    <div class="mode-tab" id="mode-tiles" onclick="switchMapMode('tiles')">TILES</div>
+                </div>
+
+                <div id="vector-map-container">
+                    <canvas id="map-canvas" width="560" height="500"></canvas>
+                </div>
+
+                <div id="tile-map-container">
+                    <div id="tile-map"></div>
+                    <div id="tile-aircraft-icon"></div>
+                </div>
+
+                <div id="map-info">
+                    <div class="map-info-item">
+                        <span class="map-info-label">HDG</span>
+                        <span class="map-info-value" id="map-hdg">---</span>
+                    </div>
+                    <div class="map-info-item">
+                        <span class="map-info-label">GS</span>
+                        <span class="map-info-value" id="map-gs">---</span>
+                    </div>
+                    <div class="map-info-item">
+                        <span class="map-info-label">ALT</span>
+                        <span class="map-info-value" id="map-alt">---</span>
+                    </div>
+                    <div class="map-info-item">
+                        <span class="map-info-label">LAT</span>
+                        <span class="map-info-value" id="map-lat" style="font-size:11px;">---</span>
+                    </div>
+                    <div class="map-info-item">
+                        <span class="map-info-label">LON</span>
+                        <span class="map-info-value" id="map-lon" style="font-size:11px;">---</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-
     <script>
     const statusText = document.getElementById('status-text');
     const fpsText = document.getElementById('fps-text');
@@ -133,8 +301,294 @@
     let frameCount = 0;
     let lastFpsTime = performance.now();
 
+    // =====================================================
+    // VIEW TOGGLE (Engine <-> Map)
+    // =====================================================
+    function switchView(view) {
+        var engineView = document.getElementById('engine-view');
+        var mapView = document.getElementById('map-view');
+        var tabEngine = document.getElementById('tab-engine');
+        var tabMap = document.getElementById('tab-map');
+        
+        if (view === 'engine') {
+            engineView.style.display = 'block';
+            mapView.style.display = 'none';
+            tabEngine.classList.add('active');
+            tabMap.classList.remove('active');
+        } else {
+            engineView.style.display = 'none';
+            mapView.style.display = 'block';
+            tabEngine.classList.remove('active');
+            tabMap.classList.add('active');
+            // The tile map container had display:none while we were on the
+            // Engine tab, which can leave MapLibre's internal canvas sized
+            // incorrectly. Force a resize once it's visible again.
+            if (tileMap && document.getElementById('tile-map-container').style.display !== 'none') {
+                setTimeout(function () { tileMap.resize(); }, 0);
+            }
+        }
+    }
+
+    // =====================================================
+    // MAP MODE TOGGLE (Vector canvas <-> Real tiles)
+    // =====================================================
+    function switchMapMode(mode) {
+        var vectorContainer = document.getElementById('vector-map-container');
+        var tileContainer = document.getElementById('tile-map-container');
+        var modeVector = document.getElementById('mode-vector');
+        var modeTiles = document.getElementById('mode-tiles');
+
+        if (mode === 'vector') {
+            vectorContainer.style.display = 'block';
+            tileContainer.style.display = 'none';
+            modeVector.classList.add('active');
+            modeTiles.classList.remove('active');
+        } else {
+            vectorContainer.style.display = 'none';
+            tileContainer.style.display = 'block';
+            modeVector.classList.remove('active');
+            modeTiles.classList.add('active');
+            if (!tileMap) {
+                initTileMap();
+            } else {
+                tileMap.resize();
+            }
+        }
+    }
+
+    // =====================================================
+    // SHARED TRAIL STATE
+    // Both the vector canvas map and the tile map read from this same
+    // array, so the trail keeps building regardless of which mode (or
+    // even which top-level tab) is currently visible.
+    // =====================================================
+    let mapTrail = [];
+    const MAX_TRAIL = 200; // max points in trail
+    let lastTrailLat = null;
+    let lastTrailLon = null;
+
+    // Some SimConnect wrapper libraries return (0, 0) -- "null island" --
+    // as a placeholder before the first real GPS position read completes.
+    // A real aircraft position exactly at 0,0 is astronomically unlikely,
+    // so we treat it (and any out-of-range value) as invalid rather than
+    // letting it seed the trail with a bogus point.
+    function isValidCoord(lat, lon) {
+        if (typeof lat !== 'number' || typeof lon !== 'number') return false;
+        if (isNaN(lat) || isNaN(lon)) return false;
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return false;
+        if (lat === 0 && lon === 0) return false;
+        return true;
+    }
+
+    function recordTrailPoint() {
+        var lat = d.latitude, lon = d.longitude;
+        if (!isValidCoord(lat, lon)) return;
+        if (lastTrailLat === null || lastTrailLon === null ||
+            Math.abs(lat - lastTrailLat) > 0.0001 ||
+            Math.abs(lon - lastTrailLon) > 0.0001) {
+            mapTrail.push({ lat: lat, lon: lon });
+            lastTrailLat = lat;
+            lastTrailLon = lon;
+            if (mapTrail.length > MAX_TRAIL) {
+                mapTrail.shift();
+            }
+        }
+    }
+
+    function updateMapInfoBar() {
+        var heading = d.heading_mag || 0;
+        var lat = d.latitude, lon = d.longitude;
+        var gs = d.gps_ground_speed || 0;
+        var alt = d.altitude || 0;
+        document.getElementById('map-hdg').textContent = Math.round(heading) + '°';
+        document.getElementById('map-gs').textContent = Math.round(gs) + 'kt';
+        document.getElementById('map-alt').textContent = Math.round(alt) + 'ft';
+        document.getElementById('map-lat').textContent = isValidCoord(lat, lon) ? lat.toFixed(5) : '---';
+        document.getElementById('map-lon').textContent = isValidCoord(lat, lon) ? lon.toFixed(5) : '---';
+    }
+
+    // =====================================================
+    // VECTOR MAP CANVAS (original hand-drawn map)
+    // =====================================================
+    const mapCanvas = document.getElementById('map-canvas');
+    const mapCtx = mapCanvas.getContext('2d');
+    const MW = mapCanvas.width;
+    const MH = mapCanvas.height;
+    const MCX = MW / 2;
+    const MCY = MH / 2;
+
+    // Map scale: how many pixels per nautical mile
+    let mapRange = 20; // nm visible from center to edge
+    let mapPxPerNm = 0; // calculated dynamically
+    
+    function drawMap() {
+        var heading = d.heading_mag || 0;
+        var lat = d.latitude;
+        var lon = d.longitude;
+        
+        // Calculate pixels per nautical mile (fit range into half the canvas height)
+        var halfSize = Math.min(MW, MH) / 2 - 20;
+        mapPxPerNm = halfSize / mapRange;
+        
+        // Clear canvas
+        mapCtx.fillStyle = '#001100';
+        mapCtx.fillRect(0, 0, MW, MH);
+        
+        // --- Range rings ---
+        mapCtx.strokeStyle = '#003300';
+        mapCtx.lineWidth = 1;
+        for (var r = mapRange / 4; r <= mapRange; r += mapRange / 4) {
+            mapCtx.beginPath();
+            mapCtx.arc(MCX, MCY, r * mapPxPerNm, 0, Math.PI * 2);
+            mapCtx.stroke();
+        }
+        
+        // --- Range labels ---
+        mapCtx.fillStyle = '#006600';
+        mapCtx.font = '9px Courier New';
+        mapCtx.textAlign = 'center';
+        for (var r2 = mapRange / 4; r2 <= mapRange; r2 += mapRange / 4) {
+            mapCtx.fillText(Math.round(r2) + 'nm', MCX + 3, MCY - r2 * mapPxPerNm + 10);
+        }
+        
+        // --- Compass rose ---
+        mapCtx.strokeStyle = '#004400';
+        mapCtx.lineWidth = 2;
+        mapCtx.beginPath();
+        mapCtx.arc(MCX, MCY, halfSize, 0, Math.PI * 2);
+        mapCtx.stroke();
+        
+        // Compass labels (N, E, S, W - rotated by heading for "track up" mode)
+        mapCtx.fillStyle = '#008800';
+        mapCtx.font = 'bold 14px Courier New';
+        mapCtx.textAlign = 'center';
+        mapCtx.textBaseline = 'middle';
+        
+        var compassDirs = [['N', 0], ['E', 90], ['S', 180], ['W', 270]];
+        var compassR = halfSize - 5;
+        
+        for (var i = 0; i < compassDirs.length; i++) {
+            var dir = compassDirs[i];
+            var angle = (dir[1] - heading) * Math.PI / 180 - Math.PI / 2;
+            var x = MCX + compassR * Math.cos(angle);
+            var y = MCY + compassR * Math.sin(angle);
+            mapCtx.fillText(dir[0], x, y);
+        }
+        
+        // --- Track trail (reads shared mapTrail, does not modify it) ---
+        if (mapTrail.length > 1 && isValidCoord(lat, lon)) {
+            mapCtx.strokeStyle = '#00FF44';
+            mapCtx.lineWidth = 2;
+            mapCtx.beginPath();
+            
+            for (var j = 0; j < mapTrail.length; j++) {
+                var point = mapTrail[j];
+                var dLatNm = (point.lat - lat) * 60;
+                var dLonNm = (point.lon - lon) * 60 * Math.cos(lat * Math.PI / 180);
+                
+                var rad = -heading * Math.PI / 180;
+                var rotX = dLonNm * Math.cos(rad) - dLatNm * Math.sin(rad);
+                var rotY = dLonNm * Math.sin(rad) + dLatNm * Math.cos(rad);
+                
+                var px = MCX + rotX * mapPxPerNm;
+                var py = MCY - rotY * mapPxPerNm;
+                
+                if (j === 0) {
+                    mapCtx.moveTo(px, py);
+                } else {
+                    mapCtx.lineTo(px, py);
+                }
+            }
+            mapCtx.stroke();
+        }
+        
+        // --- Aircraft symbol (center, pointing up) ---
+        mapCtx.fillStyle = '#FFFF00';
+        mapCtx.strokeStyle = '#FFFF00';
+        mapCtx.lineWidth = 2;
+        mapCtx.beginPath();
+        mapCtx.moveTo(MCX, MCY - 12);
+        mapCtx.lineTo(MCX - 8, MCY + 8);
+        mapCtx.lineTo(MCX, MCY + 4);
+        mapCtx.lineTo(MCX + 8, MCY + 8);
+        mapCtx.closePath();
+        mapCtx.fill();
+    }
+    
+    function renderMap() {
+        if (document.getElementById('vector-map-container').style.display !== 'none' &&
+            document.getElementById('map-view').style.display !== 'none') {
+            drawMap();
+        }
+        requestAnimationFrame(renderMap);
+    }
+
+    // =====================================================
+    // TILE MAP (MapLibre GL JS + OpenFreeMap, no API key required)
+    // =====================================================
+    let tileMap = null;
+    let tileMapReady = false;
+
+    // Default center used only until the first real GPS fix arrives.
+    const DEFAULT_CENTER = [-79.4608, 44.0592]; // roughly Newmarket, ON
+
+    function initTileMap() {
+        if (tileMap) return;
+
+        var startCenter = DEFAULT_CENTER;
+        if (isValidCoord(d.latitude, d.longitude)) {
+            startCenter = [d.longitude, d.latitude];
+        }
+
+        tileMap = new maplibregl.Map({
+            container: 'tile-map',
+            style: 'https://tiles.openfreemap.org/styles/liberty',
+            center: startCenter,
+            zoom: 12,
+            pitch: 0,
+            bearing: d.heading_mag || 0
+            // attributionControl defaults to true -- this satisfies
+            // OpenStreetMap's "must credit contributors" requirement
+            // automatically, no extra work needed.
+        });
+
+        tileMap.on('load', function () {
+            tileMap.addSource('trail', {
+                type: 'geojson',
+                data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+            });
+            tileMap.addLayer({
+                id: 'trail-line',
+                type: 'line',
+                source: 'trail',
+                paint: { 'line-color': '#00FF44', 'line-width': 3 }
+            });
+            tileMapReady = true;
+            updateTileMap();
+        });
+    }
+
+    function updateTileMap() {
+        if (!tileMap || !tileMapReady) return;
+        if (!isValidCoord(d.latitude, d.longitude)) return;
+
+        var center = [d.longitude, d.latitude];
+        var heading = d.heading_mag || 0;
+
+        // jumpTo (instant, no animation) is the right choice for
+        // real-time telemetry -- easeTo/flyTo would queue up and lag
+        // behind live position updates arriving ~20x/second.
+        tileMap.jumpTo({ center: center, bearing: heading });
+
+        var coords = mapTrail.map(function (p) { return [p.lon, p.lat]; });
+        coords.push(center);
+        var source = tileMap.getSource('trail');
+        if (source) {
+            source.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords } });
+        }
+    }
+    
     // SCALE SLIDER
-        // Read scale from URL parameter if available
     var urlParams = new URLSearchParams(window.location.search);
     var initialScale = urlParams.get('scale');
     if (initialScale) {
@@ -144,7 +598,6 @@
         bezel.style.transform = 'scale(' + initScale + ')';
         bezel.style.transformOrigin = 'center top';
     }
-
     scaleSlider.addEventListener('input', function() {
         var scale = scaleSlider.value / 100;
         scaleLabel.textContent = scaleSlider.value + '%';
@@ -165,6 +618,9 @@
                     statusText.style.color = payload.connected ? '#00FF00' : '#FF8800';
                 }
                 updateMFD();
+                recordTrailPoint();
+                updateMapInfoBar();
+                updateTileMap();
                 frameCount++;
                 var now = performance.now();
                 if (now - lastFpsTime > 1000) {
@@ -243,6 +699,7 @@
     });
 
     connectWebSocket();
+    renderMap();
     </script>
 </body>
 </html>
