@@ -261,6 +261,11 @@
     let lastFpsTime = performance.now();
     let prevAirspeed = null;
     let prevAirspeedTime = null;
+    let prevAltitude = null;
+    let prevAltitudeTime = null;
+    let cachedAltTrendY = 300;
+    let isAltTrendActive = false;
+	
 
     // Persistent state variables for continuous frame-by-frame rendering
     let cachedTrendY = 300; // Defaults to middle of tape
@@ -559,7 +564,7 @@
         }
     }
 
-    // =====================================================
+        // =====================================================
     // DRAW ALTITUDE TAPE
     // =====================================================
     function drawAltitudeTape() {
@@ -584,6 +589,44 @@
         ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
         ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'right';
         ctx.fillText(Math.round(alt) + '', x + 80, tapeMid + 6);
+
+        // Altitude trend arrow (magenta) — predicts altitude in 6 seconds
+        var altNow = performance.now();
+        if (prevAltitude !== null && prevAltitudeTime !== null) {
+            var altDt = (altNow - prevAltitudeTime) / 1000;
+            if (altDt > 0.25) {
+                var altRate = (smooth.altitude - prevAltitude) / altDt;
+                var trendAlt = smooth.altitude + altRate * 6;
+                cachedAltTrendY = tapeMid - (trendAlt - alt) * pxPerFt;
+                cachedAltTrendY = Math.max(tapeTop + 10, Math.min(tapeBottom - 10, cachedAltTrendY));
+                isAltTrendActive = Math.abs(cachedAltTrendY - tapeMid) > 3;
+                prevAltitude = smooth.altitude;
+                prevAltitudeTime = altNow;
+            }
+        } else {
+            prevAltitude = smooth.altitude;
+            prevAltitudeTime = altNow;
+        }
+
+        if (isAltTrendActive) {
+            ctx.strokeStyle = '#FF00FF'; ctx.fillStyle = '#FF00FF'; ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(x, tapeMid - 15);
+            ctx.lineTo(x, cachedAltTrendY);
+            ctx.stroke();
+            ctx.beginPath();
+            if (cachedAltTrendY < tapeMid) {
+                ctx.moveTo(x, cachedAltTrendY);
+                ctx.lineTo(x - 6, cachedAltTrendY + 10);
+                ctx.lineTo(x + 6, cachedAltTrendY + 10);
+            } else {
+                ctx.moveTo(x, cachedAltTrendY);
+                ctx.lineTo(x - 6, cachedAltTrendY - 10);
+                ctx.lineTo(x + 6, cachedAltTrendY - 10);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
     }
 
     // =====================================================
