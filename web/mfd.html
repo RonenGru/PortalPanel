@@ -9,6 +9,7 @@
     <script src="https://unpkg.com/maplibre-gl@^4/dist/maplibre-gl.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; }
         body {
             background: #000;
             overflow: hidden;
@@ -84,7 +85,7 @@
             color: #00FFFF;
             border-color: #00FFFF;
         }
-        /* MAP MODE SUB-TABS (Vector vs Tiles) */
+        /* MAP MODE / LAYOUT SUB-TABS */
         #map-mode-tabs {
             display: flex;
             gap: 4px;
@@ -114,6 +115,15 @@
             color: #00CCCC;
             border-color: #00CCCC;
         }
+        #mode-layout {
+            background: #1a1500;
+            color: #CCAA00;
+            border-color: #4a3f00;
+        }
+        #mode-layout:hover {
+            background: #2a2200;
+            color: #FFDD00;
+        }
         /* ENGINE VIEW */
         #engine-view { display: block; }
         #map-view { display: none; }
@@ -137,7 +147,15 @@
             padding: 10px;
             width: 600px;
         }
-        #vector-map-container { display: block; }
+        #map-content-row {
+            /* Default (compact) layout: children stack normally, block-level.
+               Wide layout overrides this to a flex row -- see body.wide-layout below. */
+        }
+        #vector-map-container {
+            display: block;
+            width: 560px;
+            height: 500px;
+        }
         #tile-map-container {
             display: none;
             position: relative;
@@ -160,9 +178,9 @@
             left: 50%;
             width: 0;
             height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-bottom: 18px solid #FFFF00;
+            border-left: 9px solid transparent;
+            border-right: 9px solid transparent;
+            border-bottom: 20px solid #FFFF00;
             transform: translate(-50%, -60%);
             pointer-events: none;
             z-index: 10;
@@ -170,6 +188,8 @@
         }
         #map-canvas {
             display: block;
+            width: 100%;
+            height: 100%;
             background: #001100;
             border: 1px solid #003300;
             border-radius: 4px;
@@ -189,6 +209,107 @@
         }
         .map-info-label { font-size: 9px; color: #666; }
         .map-info-value { font-size: 14px; font-weight: bold; }
+
+        /* =====================================================
+           WIDE LAYOUT -- map fills the screen, readouts become a
+           sidebar on the right. Intended for a dedicated MFD screen
+           (e.g. a small tablet viewed through Quest 3 passthrough)
+           where maximizing map size and readout legibility matters
+           more than seeing the Engine tab on the same screen.
+           ===================================================== */
+        body.wide-layout {
+            align-items: center;
+            justify-content: center;
+        }
+        body.wide-layout #bezel {
+            /* A concrete calc()-based size, rather than relying on a chain
+               of nested flex:1 percentage sizing to fill 100vh -- that
+               chain resolved inconsistently and left a gap at the bottom.
+               The 48px/24px margin below is what centers the bezel with
+               equal space on all four sides. */
+            width: calc(100vw - 48px);
+            height: calc(100vh - 48px);
+            margin: 0;
+            /* Top padding reserves space for the status bar, which is a
+               fixed, always-on-top element that slides into view whenever
+               the mouse nears the top of the screen. Without this, whatever
+               sits at the very top of wide-mode content gets covered and
+               becomes unreachable while the status bar is showing. */
+            padding: 34px 4px 4px 4px;
+            display: flex;
+            flex-direction: column;
+        }
+        body.wide-layout #view-tabs {
+            display: none;
+        }
+        body.wide-layout #engine-view {
+            display: none !important;
+        }
+        body.wide-layout #map-view {
+            display: flex !important;
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+        }
+        body.wide-layout #map-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            width: 100%;
+            min-height: 0;
+        }
+        body.wide-layout #map-content-row {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            min-height: 0;
+        }
+        body.wide-layout #vector-map-container,
+        body.wide-layout #tile-map-container {
+            flex: 1;
+            width: auto;
+            height: 100%;
+            min-width: 0;
+        }
+        body.wide-layout #map-info {
+            flex: 0 0 210px;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: stretch;
+            padding: 20px 16px;
+            background: #0a0a0a;
+            border-left: 2px solid #003300;
+            overflow-y: auto;
+        }
+        body.wide-layout .map-info-item {
+            align-items: flex-start;
+            margin-bottom: 26px;
+        }
+        body.wide-layout .map-info-label {
+            font-size: 13px;
+            letter-spacing: 1px;
+        }
+        body.wide-layout .map-info-value {
+            font-size: 32px;
+        }
+        /* The mode-tabs button row gets physically moved into #map-info
+           (below the telemetry) when Wide layout is active -- see
+           toggleLayout() in the script. Style it as a vertical stack here,
+           since a 210px sidebar is too narrow for 3 buttons side by side,
+           and a vertical stack gives bigger, easier touch targets on a
+           tablet besides. */
+        body.wide-layout #map-info #map-mode-tabs {
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #1a1a1a;
+        }
+        body.wide-layout #map-info .mode-tab {
+            padding: 12px 8px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -253,37 +374,40 @@
                 <div id="map-mode-tabs">
                     <div class="mode-tab active" id="mode-vector" onclick="switchMapMode('vector')">VECTOR</div>
                     <div class="mode-tab" id="mode-tiles" onclick="switchMapMode('tiles')">TILES</div>
+                    <div class="mode-tab" id="mode-layout" onclick="toggleLayout()">&#10530; WIDE</div>
                 </div>
 
-                <div id="vector-map-container">
-                    <canvas id="map-canvas" width="560" height="500"></canvas>
-                </div>
+                <div id="map-content-row">
+                    <div id="vector-map-container">
+                        <canvas id="map-canvas"></canvas>
+                    </div>
 
-                <div id="tile-map-container">
-                    <div id="tile-map"></div>
-                    <div id="tile-aircraft-icon"></div>
-                </div>
+                    <div id="tile-map-container">
+                        <div id="tile-map"></div>
+                        <div id="tile-aircraft-icon"></div>
+                    </div>
 
-                <div id="map-info">
-                    <div class="map-info-item">
-                        <span class="map-info-label">HDG</span>
-                        <span class="map-info-value" id="map-hdg">---</span>
-                    </div>
-                    <div class="map-info-item">
-                        <span class="map-info-label">GS</span>
-                        <span class="map-info-value" id="map-gs">---</span>
-                    </div>
-                    <div class="map-info-item">
-                        <span class="map-info-label">ALT</span>
-                        <span class="map-info-value" id="map-alt">---</span>
-                    </div>
-                    <div class="map-info-item">
-                        <span class="map-info-label">LAT</span>
-                        <span class="map-info-value" id="map-lat" style="font-size:11px;">---</span>
-                    </div>
-                    <div class="map-info-item">
-                        <span class="map-info-label">LON</span>
-                        <span class="map-info-value" id="map-lon" style="font-size:11px;">---</span>
+                    <div id="map-info">
+                        <div class="map-info-item">
+                            <span class="map-info-label">HDG</span>
+                            <span class="map-info-value" id="map-hdg">---</span>
+                        </div>
+                        <div class="map-info-item">
+                            <span class="map-info-label">GS</span>
+                            <span class="map-info-value" id="map-gs">---</span>
+                        </div>
+                        <div class="map-info-item">
+                            <span class="map-info-label">ALT</span>
+                            <span class="map-info-value" id="map-alt">---</span>
+                        </div>
+                        <div class="map-info-item">
+                            <span class="map-info-label">LAT</span>
+                            <span class="map-info-value" id="map-lat" style="font-size:11px;">---</span>
+                        </div>
+                        <div class="map-info-item">
+                            <span class="map-info-label">LON</span>
+                            <span class="map-info-value" id="map-lon" style="font-size:11px;">---</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -326,6 +450,7 @@
             if (tileMap && document.getElementById('tile-map-container').style.display !== 'none') {
                 setTimeout(function () { tileMap.resize(); }, 0);
             }
+            setTimeout(resizeVectorCanvas, 0);
         }
     }
 
@@ -343,6 +468,7 @@
             tileContainer.style.display = 'none';
             modeVector.classList.add('active');
             modeTiles.classList.remove('active');
+            setTimeout(resizeVectorCanvas, 0);
         } else {
             vectorContainer.style.display = 'none';
             tileContainer.style.display = 'block';
@@ -354,6 +480,40 @@
                 tileMap.resize();
             }
         }
+    }
+
+    // =====================================================
+    // LAYOUT TOGGLE (Compact stacked view <-> Wide dashboard view)
+    // =====================================================
+    let wideLayout = false;
+    function toggleLayout() {
+        wideLayout = !wideLayout;
+        if (wideLayout) {
+            // Wide layout is map-only -- make sure the Map tab is showing
+            // rather than leaving the user on a hidden Engine view.
+            switchView('map');
+        }
+        document.body.classList.toggle('wide-layout', wideLayout);
+        document.getElementById('mode-layout').innerHTML = wideLayout ? '&#10531; COMPACT' : '&#10530; WIDE';
+
+        // Relocate the Vector/Tiles/Layout button row: in Wide mode it
+        // moves into the sidebar (below the telemetry readouts, out of
+        // the way of the status bar that slides down over the top of the
+        // screen); in Compact mode it belongs back above the map.
+        var modeTabs = document.getElementById('map-mode-tabs');
+        if (wideLayout) {
+            document.getElementById('map-info').appendChild(modeTabs);
+        } else {
+            var contentRow = document.getElementById('map-content-row');
+            contentRow.parentNode.insertBefore(modeTabs, contentRow);
+        }
+
+        // Both map modes need to recalculate their size against the new
+        // container dimensions.
+        setTimeout(function () {
+            resizeVectorCanvas();
+            if (tileMap) tileMap.resize();
+        }, 0);
     }
 
     // =====================================================
@@ -383,6 +543,22 @@
     function recordTrailPoint() {
         var lat = d.latitude, lon = d.longitude;
         if (!isValidCoord(lat, lon)) return;
+
+        if (mapTrail.length === 0) {
+            // Don't seed the very first trail point until the aircraft is
+            // actually moving. MSFS can report a transient position during
+            // scene load -- before the aircraft settles at its final
+            // parking spot -- that is a perfectly VALID coordinate (so
+            // isValidCoord alone won't catch it), just not where the
+            // aircraft actually ends up. Recording that as trail point
+            // zero produces a long spurious straight line once the real
+            // position settles. A stationary/loading aircraft always
+            // reports 0 ground speed, so waiting for real movement
+            // reliably sidesteps this.
+            var gs = d.gps_ground_speed;
+            if (!(typeof gs === 'number' && gs > 1)) return;
+        }
+
         if (lastTrailLat === null || lastTrailLon === null ||
             Math.abs(lat - lastTrailLat) > 0.0001 ||
             Math.abs(lon - lastTrailLon) > 0.0001) {
@@ -412,10 +588,53 @@
     // =====================================================
     const mapCanvas = document.getElementById('map-canvas');
     const mapCtx = mapCanvas.getContext('2d');
-    const MW = mapCanvas.width;
-    const MH = mapCanvas.height;
-    const MCX = MW / 2;
-    const MCY = MH / 2;
+
+    // MW/MH/MCX/MCY are logical (CSS-pixel) canvas dimensions. The actual
+    // backing buffer is set larger (by devicePixelRatio) for crispness on
+    // high-DPI displays -- see resizeVectorCanvas() -- but all drawing
+    // code below works purely in these logical units, so nothing else
+    // needs to change to benefit from the sharper rendering.
+    let MW = 560;
+    let MH = 500;
+    let MCX = MW / 2;
+    let MCY = MH / 2;
+
+    function resizeVectorCanvas() {
+        var container = document.getElementById('vector-map-container');
+        // IMPORTANT: use clientWidth/clientHeight, not getBoundingClientRect().
+        // getBoundingClientRect() returns the POST-transform (visually
+        // scaled) size, and #bezel is scaled via transform:scale() by the
+        // size slider. Measuring with that would cause double-scaling --
+        // the canvas would resize to match the already-scaled container,
+        // then get scaled again by the ancestor transform, growing faster
+        // than the bezel around it. clientWidth/clientHeight reflect the
+        // element's real CSS layout size, unaffected by any ancestor
+        // transform, which is what we actually want here.
+        var w = Math.max(100, container.clientWidth);
+        var h = Math.max(100, container.clientHeight);
+        var dpr = window.devicePixelRatio || 1;
+
+        if (w === MW && h === MH && mapCanvas.width === Math.floor(w * dpr)) {
+            return; // nothing changed, skip the (relatively) expensive resize
+        }
+
+        mapCanvas.width = Math.floor(w * dpr);
+        mapCanvas.height = Math.floor(h * dpr);
+        mapCanvas.style.width = w + 'px';
+        mapCanvas.style.height = h + 'px';
+
+        // Scale the drawing context so all existing drawMap() code can keep
+        // working in logical CSS-pixel units while the backing buffer is
+        // physically higher resolution -- this is what makes text/lines
+        // render crisply instead of blurry when the canvas is stretched
+        // larger (e.g. in Wide layout, or on a high-DPI tablet).
+        mapCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        MW = w;
+        MH = h;
+        MCX = MW / 2;
+        MCY = MH / 2;
+    }
 
     // Map scale: how many pixels per nautical mile
     let mapRange = 20; // nm visible from center to edge
@@ -436,7 +655,7 @@
         
         // --- Range rings ---
         mapCtx.strokeStyle = '#003300';
-        mapCtx.lineWidth = 1;
+        mapCtx.lineWidth = 1.5;
         for (var r = mapRange / 4; r <= mapRange; r += mapRange / 4) {
             mapCtx.beginPath();
             mapCtx.arc(MCX, MCY, r * mapPxPerNm, 0, Math.PI * 2);
@@ -444,23 +663,23 @@
         }
         
         // --- Range labels ---
-        mapCtx.fillStyle = '#006600';
-        mapCtx.font = '9px Courier New';
+        mapCtx.fillStyle = '#008800';
+        mapCtx.font = '10px Courier New';
         mapCtx.textAlign = 'center';
         for (var r2 = mapRange / 4; r2 <= mapRange; r2 += mapRange / 4) {
             mapCtx.fillText(Math.round(r2) + 'nm', MCX + 3, MCY - r2 * mapPxPerNm + 10);
         }
         
         // --- Compass rose ---
-        mapCtx.strokeStyle = '#004400';
-        mapCtx.lineWidth = 2;
+        mapCtx.strokeStyle = '#005500';
+        mapCtx.lineWidth = 3;
         mapCtx.beginPath();
         mapCtx.arc(MCX, MCY, halfSize, 0, Math.PI * 2);
         mapCtx.stroke();
         
         // Compass labels (N, E, S, W - rotated by heading for "track up" mode)
-        mapCtx.fillStyle = '#008800';
-        mapCtx.font = 'bold 14px Courier New';
+        mapCtx.fillStyle = '#00CC00';
+        mapCtx.font = 'bold 16px Courier New';
         mapCtx.textAlign = 'center';
         mapCtx.textBaseline = 'middle';
         
@@ -478,7 +697,9 @@
         // --- Track trail (reads shared mapTrail, does not modify it) ---
         if (mapTrail.length > 1 && isValidCoord(lat, lon)) {
             mapCtx.strokeStyle = '#00FF44';
-            mapCtx.lineWidth = 2;
+            mapCtx.lineWidth = 5;
+            mapCtx.shadowColor = '#00FF44';
+            mapCtx.shadowBlur = 6;
             mapCtx.beginPath();
             
             for (var j = 0; j < mapTrail.length; j++) {
@@ -500,6 +721,7 @@
                 }
             }
             mapCtx.stroke();
+            mapCtx.shadowBlur = 0; // reset -- otherwise this glow would bleed into the aircraft symbol below
         }
         
         // --- Aircraft symbol (center, pointing up) ---
@@ -507,10 +729,10 @@
         mapCtx.strokeStyle = '#FFFF00';
         mapCtx.lineWidth = 2;
         mapCtx.beginPath();
-        mapCtx.moveTo(MCX, MCY - 12);
-        mapCtx.lineTo(MCX - 8, MCY + 8);
+        mapCtx.moveTo(MCX, MCY - 14);
+        mapCtx.lineTo(MCX - 9, MCY + 9);
         mapCtx.lineTo(MCX, MCY + 4);
-        mapCtx.lineTo(MCX + 8, MCY + 8);
+        mapCtx.lineTo(MCX + 9, MCY + 9);
         mapCtx.closePath();
         mapCtx.fill();
     }
@@ -518,6 +740,7 @@
     function renderMap() {
         if (document.getElementById('vector-map-container').style.display !== 'none' &&
             document.getElementById('map-view').style.display !== 'none') {
+            resizeVectorCanvas();
             drawMap();
         }
         requestAnimationFrame(renderMap);
@@ -528,23 +751,29 @@
     // =====================================================
     let tileMap = null;
     let tileMapReady = false;
+    let hasZoomedToPosition = false; // tracks the one-time zoom-in transition
 
-    // Default center used only until the first real GPS fix arrives.
-    const DEFAULT_CENTER = [-79.4608, 44.0592]; // roughly Newmarket, ON
+    // Neutral fallback -- a wide world view, not any specific real-world
+    // location -- used only until the first real GPS fix arrives from
+    // MSFS. Also relevant if this is ever shared/released publicly:
+    // nobody sees a real person's home location as a default.
+    const WORLD_VIEW_CENTER = [0, 20];
+    const WORLD_VIEW_ZOOM = 1.3;
+    const FLYING_ZOOM = 12;
 
     function initTileMap() {
         if (tileMap) return;
 
-        var startCenter = DEFAULT_CENTER;
-        if (isValidCoord(d.latitude, d.longitude)) {
-            startCenter = [d.longitude, d.latitude];
-        }
+        var haveRealPosition = isValidCoord(d.latitude, d.longitude);
+        var startCenter = haveRealPosition ? [d.longitude, d.latitude] : WORLD_VIEW_CENTER;
+        var startZoom = haveRealPosition ? FLYING_ZOOM : WORLD_VIEW_ZOOM;
+        hasZoomedToPosition = haveRealPosition;
 
         tileMap = new maplibregl.Map({
             container: 'tile-map',
             style: 'https://tiles.openfreemap.org/styles/liberty',
             center: startCenter,
-            zoom: 12,
+            zoom: startZoom,
             pitch: 0,
             bearing: d.heading_mag || 0
             // attributionControl defaults to true -- this satisfies
@@ -561,7 +790,7 @@
                 id: 'trail-line',
                 type: 'line',
                 source: 'trail',
-                paint: { 'line-color': '#00FF44', 'line-width': 3 }
+                paint: { 'line-color': '#00FF44', 'line-width': 6 }
             });
             tileMapReady = true;
             updateTileMap();
@@ -578,7 +807,15 @@
         // jumpTo (instant, no animation) is the right choice for
         // real-time telemetry -- easeTo/flyTo would queue up and lag
         // behind live position updates arriving ~20x/second.
-        tileMap.jumpTo({ center: center, bearing: heading });
+        if (!hasZoomedToPosition) {
+            // First real position we've seen -- zoom in from the world
+            // view once. Later updates deliberately omit `zoom` so we
+            // don't fight the user if they've manually zoomed/panned.
+            tileMap.jumpTo({ center: center, bearing: heading, zoom: FLYING_ZOOM });
+            hasZoomedToPosition = true;
+        } else {
+            tileMap.jumpTo({ center: center, bearing: heading });
+        }
 
         var coords = mapTrail.map(function (p) { return [p.lon, p.lat]; });
         coords.push(center);
@@ -698,7 +935,14 @@
         }
     });
 
+    // RESIZE (window/tablet orientation changes, etc.)
+    window.addEventListener('resize', function () {
+        resizeVectorCanvas();
+        if (tileMap) tileMap.resize();
+    });
+
     connectWebSocket();
+    resizeVectorCanvas();
     renderMap();
     </script>
 </body>
