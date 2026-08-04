@@ -497,6 +497,43 @@
         ctx.fillStyle = '#FFFF00';
         ctx.fill();
         ctx.restore();
+
+    // =====================================================
+    // AUTOPILOT STATUS ANNUNCIATORS
+    // =====================================================
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'left';
+    var apX = 110;
+    var apY = 120;
+    if (d.ap_master) {
+        ctx.fillStyle = '#00FF00';
+        ctx.fillText('AP', apX, apY);
+        apY += 22;
+    }
+    if (d.ap_hdg_lock) {
+        ctx.fillStyle = '#00FFFF';
+        ctx.fillText('HDG', apX, apY);
+        apY += 22;
+    }
+    if (d.ap_alt_lock) {
+        ctx.fillStyle = '#00FFFF';
+        ctx.fillText('ALT', apX, apY);
+        apY += 22;
+    }
+    if (d.ap_nav_lock) {
+        ctx.fillStyle = '#00FFFF';
+        ctx.fillText('NAV', apX, apY);
+        apY += 22;
+    }
+    if (d.ap_apr_lock) {
+        ctx.fillStyle = '#00FFFF';
+        ctx.fillText('APR', apX, apY);
+        apY += 22;
+    }
+    if (d.ap_vs_lock) {
+        ctx.fillStyle = '#00FFFF';
+        ctx.fillText('VS', apX, apY);
+    }
     }
 
         // DRAW AIRSPEED TAPE

@@ -142,9 +142,7 @@ def convert_units(raw_data):
         converted["heading_true"] = round(converted["heading_true"] * 57.2958, 2)
     if converted.get("heading_mag") is not None:
         converted["heading_mag"] = round(converted["heading_mag"] * 57.2958, 2)
-    # Heading bug: also in radians from MSFS 2024
-    if converted.get("hdg_bug") is not None:
-        converted["hdg_bug"] = round(converted["hdg_bug"] * 57.2958, 2)
+    # Heading bug: SimConnect library already returns this in degrees — no conversion needed
 
     # Temperature: Rankine -> Fahrenheit
     for key in ["eng_oil_temp", "eng_egt", "eng_cht"]:
