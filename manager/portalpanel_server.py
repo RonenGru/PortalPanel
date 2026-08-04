@@ -69,6 +69,20 @@ INSTRUMENT_VARS = {
     "nav2_dme":              "NAV_DME:2",
     "gps_ground_speed":      "GPS_GROUND_SPEED",
     "gps_magvar":            "GPS_MAGVAR",
+    # Autopilot / Heading Bug
+    "hdg_bug":              "AUTOPILOT_HEADING_LOCK_DIR",
+    "ap_master":            "AUTOPILOT_MASTER",
+    "ap_alt_lock":          "AUTOPILOT_ALTITUDE_LOCK",
+    "ap_hdg_lock":          "AUTOPILOT_HEADING_LOCK",
+    "ap_nav_lock":          "AUTOPILOT_NAV1_LOCK",
+    "ap_apr_lock":          "AUTOPILOT_APPROACH_HOLD",
+    "ap_vs_lock":           "AUTOPILOT_VERTICAL_HOLD",
+    "ap_fdir_bank":         "AUTOPILOT_FLIGHT_DIRECTOR_BANK",
+    "ap_fdir_pitch":        "AUTOPILOT_FLIGHT_DIRECTOR_PITCH",
+    # CDI
+    "nav1_cdi":             "NAV_CDI:1",
+    "nav2_cdi":             "NAV_CDI:2",
+    "gps_cdi":              "GPS_DRIVES_NAV1",
     # Weather
     "oat":                  "AMBIENT_TEMPERATURE",
     "wind_dir":             "AMBIENT_WIND_DIRECTION",
@@ -123,6 +137,14 @@ def convert_units(raw_data):
         converted["pitch"] = round(converted["pitch"] * 57.2958, 2)
     if converted.get("roll") is not None:
         converted["roll"] = round(converted["roll"] * 57.2958, 2)
+    # Heading: MSFS 2024 also returns radians, convert to degrees
+    if converted.get("heading_true") is not None:
+        converted["heading_true"] = round(converted["heading_true"] * 57.2958, 2)
+    if converted.get("heading_mag") is not None:
+        converted["heading_mag"] = round(converted["heading_mag"] * 57.2958, 2)
+    # Heading bug: also in radians from MSFS 2024
+    if converted.get("hdg_bug") is not None:
+        converted["hdg_bug"] = round(converted["hdg_bug"] * 57.2958, 2)
 
     # Temperature: Rankine -> Fahrenheit
     for key in ["eng_oil_temp", "eng_egt", "eng_cht"]:
@@ -210,6 +232,10 @@ def simconnect_loop():
                 "nav2_signal": 0, "nav2_dme": 0,
                 "gps_ground_speed": 120, "gps_magvar": 0,
                 "oat": 15.0, "wind_dir": 270, "wind_speed": 10,
+                "hdg_bug": 180, "ap_master": 0, "ap_alt_lock": 0,
+                "ap_hdg_lock": 0, "ap_nav_lock": 0, "ap_apr_lock": 0,
+                "ap_vs_lock": 0, "ap_fdir_bank": 0, "ap_fdir_pitch": 0,
+                "nav1_cdi": 0, "nav2_cdi": 0, "gps_cdi": 0,
                 "eng_rpm": 2300, "eng_manifold_press": 23.0,
                 "eng_oil_temp": 168.0, "eng_oil_pressure": 50.0,
                 "eng_egt": 1250.0, "eng_cht": 300.0,

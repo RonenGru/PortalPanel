@@ -256,6 +256,8 @@
         baro_pressure: 1013, turn_rate: 0, slip_ball: 0,
         nav1_freq: 0, nav2_freq: 0
     };
+	let smoothHdgBug = 0;
+    let lastHdgBug = null;
     const SMOOTH_FACTOR = 0.35; // Adjusted slightly for smoother high-frequency transitions
     let frameCount = 0;
     let lastFpsTime = performance.now();
@@ -640,7 +642,18 @@
         ctx.save();
         ctx.beginPath(); ctx.rect(0, tapeTop, W, tapeBottom - tapeTop); ctx.clip();
         ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial'; ctx.textAlign = 'center';
-        for (var deg = Math.floor(heading - range); deg <= Math.ceil(heading + range); deg += 5) {
+        // IMPORTANT: snap the starting tick to a true multiple of 5. Using
+        // Math.floor(heading - range) directly (the old code) floors
+        // whatever fractional value heading happens to have at that
+        // instant, so the tick sequence's "phase" drifts randomly frame
+        // to frame as heading smoothly changes. Since labels only draw on
+        // deg % 10 === 0, an unaligned phase means some frames have NO
+        // tick landing on a multiple of 10 at all -- that's the reported
+        // "numbers flicker in and out" bug. Snapping here guarantees the
+        // sequence always includes true compass multiples of 5 (and thus
+        // of 10), every frame, regardless of heading's fractional part.
+        var startDeg = Math.floor((heading - range) / 5) * 5;
+        for (var deg = startDeg; deg <= heading + range; deg += 5) {
             var actualDeg = deg;
             while (actualDeg < 0) actualDeg += 360;
             while (actualDeg >= 360) actualDeg -= 360;
@@ -662,9 +675,36 @@
         ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(CX - 30, tapeMid - 15, 60, 30);
         ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'center';
         ctx.fillText(Math.round(heading) + '', CX, tapeMid + 6);
-        ctx.fillStyle = '#FFFF00';
+                ctx.fillStyle = '#FFFF00';
         ctx.beginPath(); ctx.moveTo(CX - 8, tapeTop); ctx.lineTo(CX + 8, tapeTop); ctx.lineTo(CX, tapeTop + 12);
         ctx.closePath(); ctx.fill();
+
+        // Heading Bug (cyan marker)
+        var hdgBug = smoothHdgBug || 0;
+        var diff = hdgBug - heading;
+        if (diff > 180) diff -= 360;
+        if (diff < -180) diff += 360;
+        var bugX = CX + diff * pxPerDeg;
+        if (bugX > 0 && bugX < W) {
+            // Draw S-shaped bug marker (cyan)
+            ctx.fillStyle = '#00FFFF';
+            ctx.strokeStyle = '#00FFFF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(bugX, tapeTop);
+            ctx.lineTo(bugX - 6, tapeTop - 6);
+            ctx.lineTo(bugX - 6, tapeTop - 10);
+            ctx.lineTo(bugX + 6, tapeTop - 10);
+            ctx.lineTo(bugX + 6, tapeTop - 6);
+            ctx.closePath();
+            ctx.fill();
+
+            // Draw bug line down to the tape
+            ctx.beginPath();
+            ctx.moveTo(bugX, tapeTop + 2);
+            ctx.lineTo(bugX, tapeTop + 20);
+            ctx.stroke();
+        }
     }
 
     // =====================================================
@@ -707,7 +747,28 @@
                 smooth[key] += (d[key] - smooth[key]) * lerpFactor;
             }
         }
-        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+		
+		// Smooth heading bug with 0/360 wraparound
+        if (d.hdg_bug !== undefined && d.hdg_bug !== null) {
+            var bugDeg = d.hdg_bug;
+            // AUTOPILOT_HEADING_LOCK_DIR appears to be reported relative to
+            // TRUE north, while heading_mag (and this tape) are MAGNETIC --
+            // the same true/magnetic mismatch already handled for wind
+            // direction in updateSideInfo() above. Subtracting magvar
+            // converts it to the same magnetic frame the tape uses, so the
+            // bug marker should land exactly under the magenta box once
+            // the aircraft reaches the selected heading. If it's now off
+            // in the OTHER direction instead, flip this to
+            // "bugDeg + d.gps_magvar".
+            if (d.gps_magvar !== undefined && d.gps_magvar !== null) {
+                bugDeg = bugDeg - d.gps_magvar;
+                if (bugDeg < 0) bugDeg += 360;
+                if (bugDeg >= 360) bugDeg -= 360;
+            }
+            smoothHdgBug = bugDeg;
+        }
+        
+		ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
         drawAttitudeIndicator();
         drawAirspeedTape();
         drawAltitudeTape();
