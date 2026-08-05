@@ -83,6 +83,9 @@ INSTRUMENT_VARS = {
     "nav1_cdi":             "NAV_CDI:1",
     "nav2_cdi":             "NAV_CDI:2",
     "gps_cdi":              "GPS_DRIVES_NAV1",
+    "gps_cross_trk":        "GPS_WP_CROSS_TRK",
+    "gps_wp_distance":      "GPS_WP_DISTANCE",
+    "gps_wp_ete":           "GPS_ETE",
     # Weather
     "oat":                  "AMBIENT_TEMPERATURE",
     "wind_dir":             "AMBIENT_WIND_DIRECTION",
@@ -167,6 +170,15 @@ def convert_units(raw_data):
             "vacuum"]:
         if converted.get(key) is not None and isinstance(converted[key], float):
             converted[key] = round(converted[key], 2)
+    # GPS cross-track: meters -> nautical miles (1 nm = 1852 m)
+    if converted.get("gps_cross_trk") is not None:
+        converted["gps_cross_trk"] = round(converted["gps_cross_trk"] / 1852.0, 3)
+    # GPS waypoint distance: meters -> nautical miles
+    if converted.get("gps_wp_distance") is not None:
+        converted["gps_wp_distance"] = round(converted["gps_wp_distance"] / 1852.0, 1)
+    # GPS ETE: seconds -> minutes
+    if converted.get("gps_wp_ete") is not None:
+        converted["gps_wp_ete"] = round(converted["gps_wp_ete"] / 60.0, 1)    
 
     # Format NAV frequencies nicely
     for key in ["nav1_freq", "nav1_stby_freq", "nav2_freq", "nav2_stby_freq"]:

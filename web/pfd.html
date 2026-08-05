@@ -393,11 +393,62 @@
         ctx.fillText('APR', apX, apY);
         apY += 22;
     }
-    if (d.ap_vs_lock) {
+        if (d.ap_vs_lock) {
         ctx.fillStyle = '#00FFFF';
         ctx.fillText('VS', apX, apY);
     }
     }
+
+// =====================================================
+// CDI NEEDLE (Course Deviation Indicator)
+// =====================================================
+function drawCDI() {
+    // Determine which CDI source is active
+    var cdiValue = 0;
+    var hasSignal = false;
+
+    if (d.gps_cdi) {
+        // GPS mode: use cross-track error instead of NAV_CDI
+        // GPS_WP_CROSS_TRK reports nautical miles off course
+        // Full-scale deflection = 5 nm (typical GPS sensitivity)
+        var crossTrk = d.gps_cross_trk || 0;
+        cdiValue = (crossTrk / 5.0) * 127;
+        hasSignal = true;
+    } else if (d.nav1_signal) {
+        // NAV1 VOR mode: use traditional NAV_CDI (-127 to +127)
+        cdiValue = d.nav1_cdi || 0;
+        hasSignal = true;
+    }
+
+    if (!hasSignal) return;
+
+    // Map to pixels: full deflection = ±100px from center
+    var deflection = Math.max(-127, Math.min(127, cdiValue));
+    var needleOffset = (deflection / 127) * 100;
+
+    // Draw the CDI needle — horizontal magenta line that moves up/down
+    ctx.strokeStyle = '#FF00FF';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(CX - 120, CY - needleOffset);
+    ctx.lineTo(CX - 30, CY - needleOffset);
+    ctx.moveTo(CX + 30, CY - needleOffset);
+    ctx.lineTo(CX + 120, CY - needleOffset);
+    ctx.stroke();
+
+    // Draw dots (deviation scale) — 4 dots above and below center
+    ctx.fillStyle = '#FFFFFF';
+    for (var dot = -2; dot <= 2; dot++) {
+        if (dot === 0) continue;
+        var dotY = CY + dot * 30;
+        // Only draw dots within the attitude circle
+        if (Math.abs(dotY - CY) < 200) {
+            ctx.beginPath();
+            ctx.arc(CX, dotY, 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
 
         // DRAW AIRSPEED TAPE
     function drawAirspeedTape() {
@@ -662,10 +713,11 @@
             smoothHdgBug = bugDeg;
         }	
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-        drawAttitudeIndicator();
+                drawAttitudeIndicator();
         drawAirspeedTape();
         drawAltitudeTape();
         drawHeadingTape();
+        drawCDI();
         drawVSI();
         frameCount++;
         if (now - lastFpsTime > 1000) {
