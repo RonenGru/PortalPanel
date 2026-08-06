@@ -535,6 +535,49 @@
         ctx.fillText('VS', apX, apY);
     }
     }
+	
+    // =====================================================
+    // FLIGHT DIRECTOR BARS
+    // =====================================================
+    function drawFlightDirector() {
+        if (!d.ap_master && !d.ap_fdir_pitch && !d.ap_fdir_bank) return;
+
+        var fdirBank = d.ap_fdir_bank || 0;
+        var fdirPitch = d.ap_fdir_pitch || 0;
+
+        // Only show if flight director is actually active
+        // (non-zero pitch/bank command or AP master on)
+        if (fdirBank === 0 && fdirPitch === 0 && !d.ap_master) return;
+
+        // Scale: bank bar moves left/right, pitch bar moves up/down
+        // Full-scale deflection ~25° = 80 pixels
+        var bankOffset = (fdirBank / 25) * 80;
+        bankOffset = Math.max(-80, Math.min(80, bankOffset));
+        var pitchOffset = (fdirPitch / 20) * 80;
+        pitchOffset = Math.max(-80, Math.min(80, pitchOffset));
+
+        // Draw the two magenta command bars (inverted V / chevron shape)
+        // The bars are angled toward each other, pointing up — like »
+        // You fly TOWARD the intersection point to follow the FD
+        ctx.strokeStyle = '#FF00FF';
+        ctx.lineWidth = 5;
+
+        // The command target is where bankOffset and pitchOffset meet
+        var targetX = CX + bankOffset;
+        var targetY = CY - pitchOffset;
+
+        // Left bar: angled from lower-left up to the target
+        ctx.beginPath();
+        ctx.moveTo(targetX - 70, targetY + 70);
+        ctx.lineTo(targetX - 20, targetY + 20);
+        ctx.stroke();
+
+        // Right bar: angled from lower-right up to the target
+        ctx.beginPath();
+        ctx.moveTo(targetX + 70, targetY + 70);
+        ctx.lineTo(targetX + 20, targetY + 20);
+        ctx.stroke();
+    }    	
 
 // =====================================================
 // CDI NEEDLE (Course Deviation Indicator)
@@ -857,7 +900,8 @@ function drawCDI() {
         }
         
 		ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-                drawAttitudeIndicator();
+        drawAttitudeIndicator();
+		drawFlightDirector();
         drawAirspeedTape();
         drawAltitudeTape();
         drawHeadingTape();

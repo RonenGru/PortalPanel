@@ -146,6 +146,11 @@ def convert_units(raw_data):
     if converted.get("heading_mag") is not None:
         converted["heading_mag"] = round(converted["heading_mag"] * 57.2958, 2)
     # Heading bug: SimConnect library already returns this in degrees — no conversion needed
+        # Flight Director: MSFS 2024 returns radians, convert to degrees
+    if converted.get("ap_fdir_bank") is not None:
+        converted["ap_fdir_bank"] = round(converted["ap_fdir_bank"] * 57.2958, 2)
+    if converted.get("ap_fdir_pitch") is not None:
+        converted["ap_fdir_pitch"] = round(converted["ap_fdir_pitch"] * 57.2958, 2)
 
     # Temperature: Rankine -> Fahrenheit
     for key in ["eng_oil_temp", "eng_egt", "eng_cht"]:
