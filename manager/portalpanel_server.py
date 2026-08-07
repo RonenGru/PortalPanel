@@ -13,7 +13,7 @@ from flask_socketio import SocketIO
 
 # Try to import SimConnect
 try:
-    from SimConnect import SimConnect, AircraftRequests
+    from SimConnect import SimConnect, AircraftRequests, AircraftEvents
     SIMCONNECT_AVAILABLE = True
 except ImportError:
     SIMCONNECT_AVAILABLE = False
@@ -31,7 +31,7 @@ DATA_REFRESH_MS = 50  # How often to read SimConnect (ms)
 # =====================================================================
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="/static")
 app.config["SECRET_KEY"] = "portalpanel-secret"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
 
 # =====================================================================
 # INSTRUMENT DATA STORE
@@ -39,6 +39,8 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 g_instrument_data = {}
 g_data_lock = threading.Lock()
 g_simconnect_active = False
+g_simconnect_requests = None  # Stores the AircraftRequests object for writing
+g_simconnect_events = None    # Stores the AircraftEvents object for events
 g_status_message = "Initializing..."
 
 # Final corrected variable list (from our testing)
@@ -225,6 +227,7 @@ def read_instrument_data(ar):
 def simconnect_loop():
     """Background thread: continuously read SimConnect data and push via WebSocket"""
     global g_instrument_data, g_simconnect_active, g_status_message
+    global g_simconnect_requests, g_simconnect_events
 
     if not SIMCONNECT_AVAILABLE:
         g_status_message = "SimConnect not installed (mock mode)"
@@ -282,6 +285,8 @@ def simconnect_loop():
             if not g_simconnect_active:
                 sm = SimConnect()
                 ar = AircraftRequests(sm, _time=DATA_REFRESH_MS)
+                g_simconnect_requests = ar
+                g_simconnect_events = AircraftEvents(sm)
                 g_simconnect_active = True
                 g_status_message = "Connected to MSFS"
                 print("[SIMCONNECT] Connected!")
@@ -410,6 +415,65 @@ def api_monitors():
     except Exception as e:
         return jsonify({"monitors": [], "error": str(e)})
 
+
+@socketio.on("knob_command")
+def handle_knob_command(data):
+    """Receives knob commands from web UI or hardware and writes to MSFS"""
+    if not g_simconnect_active or g_simconnect_requests is None:
+        return
+    cmd = data.get("cmd")
+    print("[KNOB] Received: {}".format(cmd))
+    try:
+        ar = g_simconnect_requests
+        ae = g_simconnect_events
+        # --- NAV1 Frequency ---
+        if cmd == "NAV1_BIG_RIGHT":
+            event = ae.find("NAV1_RADIO_WHOLE_INC")
+            event()
+        elif cmd == "NAV1_BIG_LEFT":
+            event = ae.find("NAV1_RADIO_WHOLE_DEC")
+            event()
+        elif cmd == "NAV1_SMALL_RIGHT":
+            event = ae.find("NAV1_RADIO_FRACT_INC")
+            event()
+        elif cmd == "NAV1_SMALL_LEFT":
+            event = ae.find("NAV1_RADIO_FRACT_DEC")
+            event()
+        elif cmd == "NAV1_SWAP":
+            event = ae.find("NAV1_RADIO_SWAP")
+            event()
+        # --- NAV2 Frequency ---
+        elif cmd == "NAV2_BIG_RIGHT":
+            event = ae.find("NAV2_RADIO_WHOLE_INC")
+            event()
+        elif cmd == "NAV2_BIG_LEFT":
+            event = ae.find("NAV2_RADIO_WHOLE_DEC")
+            event()
+        elif cmd == "NAV2_SMALL_RIGHT":
+            event = ae.find("NAV2_RADIO_FRACT_INC")
+            event()
+        elif cmd == "NAV2_SMALL_LEFT":
+            event = ae.find("NAV2_RADIO_FRACT_DEC")
+            event()
+        elif cmd == "NAV2_SWAP":
+            event = ae.find("NAV2_RADIO_SWAP")
+            event()
+        # --- BARO Setting ---
+        elif cmd == "BARO_RIGHT":
+            event = ae.find("KOHLSMAN_INC")
+            event()
+        elif cmd == "BARO_LEFT":
+            event = ae.find("KOHLSMAN_DEC")
+            event()
+        # --- Heading Bug ---
+        elif cmd == "HDG_RIGHT":
+            event = ae.find("HEADING_BUG_INC")
+            event()
+        elif cmd == "HDG_LEFT":
+            event = ae.find("HEADING_BUG_DEC")
+            event()
+    except Exception as e:
+        print("[KNOB] Error writing to SimConnect: {}".format(e))
 
 @socketio.on("connect")
 def on_connect():

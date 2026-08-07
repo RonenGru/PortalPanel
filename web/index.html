@@ -81,6 +81,17 @@
         }
         .info-box .label { font-size: 8px; color: #888; margin-bottom: 2px; }
         .info-box .value { font-size: 14px; font-weight: bold; }
+		.knob-btn {
+            background: #1a1a1a; border: 1px solid #333; color: #00FFFF;
+            font-size: 10px; padding: 1px 4px; border-radius: 2px;
+            cursor: pointer; font-family: 'Courier New', monospace;
+            margin: 0 1px; user-select: none; line-height: 1;
+        }
+        .knob-btn:hover { background: #003344; color: #fff; }
+        .knob-btn:active { background: #00FFFF; color: #000; }
+        .info-box .knob-row {
+            display: flex; justify-content: center; gap: 2px; margin-top: 3px;
+        }
 
         /* ====================================================
            PFD CANVAS
@@ -163,14 +174,32 @@
             <div class="info-box">
                 <div class="label">NAV1</div>
                 <div class="value" id="info-nav1">---.--</div>
+                <div class="knob-row">
+                    <button class="knob-btn" onclick="sendKnob('NAV1_BIG_LEFT')">−−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_SMALL_LEFT')">−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_SWAP')">⇄</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_SMALL_RIGHT')">+</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_BIG_RIGHT')">++</button>
+                </div>
             </div>
             <div class="info-box">
                 <div class="label">NAV2</div>
                 <div class="value" id="info-nav2">---.--</div>
+                <div class="knob-row">
+                    <button class="knob-btn" onclick="sendKnob('NAV2_BIG_LEFT')">−−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_SMALL_LEFT')">−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_SWAP')">⇄</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_SMALL_RIGHT')">+</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_BIG_RIGHT')">++</button>
+                </div>
             </div>
-                        <div class="info-box">
+            <div class="info-box">
                 <div class="label">BARO</div>
                 <div class="value" id="info-baro">----</div>
+                <div class="knob-row">
+                    <button class="knob-btn" onclick="sendKnob('BARO_LEFT')">−</button>
+                    <button class="knob-btn" onclick="sendKnob('BARO_RIGHT')">+</button>
+                </div>
             </div>
             <div class="info-box">
                 <div class="label">OAT</div>
@@ -277,6 +306,16 @@
     // WEBSOCKET
     // =====================================================
     let socket = null;
+	
+	// =====================================================
+    // SEND KNOB COMMAND TO SERVER
+    // =====================================================
+    function sendKnob(cmd) {
+        if (socket && socket.connected) {
+            socket.emit('knob_command', { cmd: cmd });
+            console.log('[KNOB] Sent: ' + cmd);
+        }
+    }
 
     function connectWebSocket() {
         try {

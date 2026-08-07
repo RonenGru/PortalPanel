@@ -12,7 +12,6 @@
             overflow: hidden;
             font-family: 'Arial', sans-serif;
         }
-
         /* STATUS BAR */
         #status-bar {
             position: fixed; top: 0; left: 0; right: 0;
@@ -31,7 +30,6 @@
             cursor: pointer; font-family: 'Courier New', monospace; margin-left: 10px;
         }
         #fullscreen-btn:hover { background: #333; color: #fff; }
-
         /* UNIFIED BEZEL */
         #bezel {
             background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
@@ -46,7 +44,6 @@
             top: 50%; left: 50%;
             transform: translate(-50%, -50%) scale(1.4);
         }
-
         /* LEFT PANEL - NAV1, NAV2, BARO */
         #left-info {
             width: 90px;
@@ -63,11 +60,20 @@
         }
         .info-box .label { font-size: 8px; color: #888; margin-bottom: 2px; }
         .info-box .value { font-size: 14px; font-weight: bold; }
-
+        .knob-btn {
+            background: #1a1a1a; border: 1px solid #333; color: #00FFFF;
+            font-size: 10px; padding: 1px 4px; border-radius: 2px;
+            cursor: pointer; font-family: 'Courier New', monospace;
+            margin: 0 1px; user-select: none; line-height: 1;
+        }
+        .knob-btn:hover { background: #003344; color: #fff; }
+        .knob-btn:active { background: #00FFFF; color: #000; }
+        .info-box .knob-row {
+            display: flex; justify-content: center; gap: 2px; margin-top: 3px;
+        }
         /* PFD CANVAS */
         #pfd-section { background: #000; border-radius: 4px; }
         #pfd-canvas { display: block; border-radius: 4px; }
-
         /* CENTER COLUMN - Soft keys + VSI */
         #center-column {
             width: 70px;
@@ -90,7 +96,7 @@
     </style>
 </head>
 <body>
-        <div id="status-bar">
+    <div id="status-bar">
         <span id="status-text">Connecting...</span>
         <div style="display: flex; align-items: center;">
             <span id="fps-text">0 fps</span>
@@ -101,20 +107,37 @@
             <button id="fullscreen-btn">Fullscreen</button>
         </div>
     </div>
-
     <div id="bezel">
         <div id="left-info">
             <div class="info-box">
                 <div class="label">NAV1</div>
                 <div class="value" id="info-nav1">---.--</div>
+                <div class="knob-row">
+                    <button class="knob-btn" onclick="sendKnob('NAV1_BIG_LEFT')">−−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_SMALL_LEFT')">−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_SWAP')">⇄</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_SMALL_RIGHT')">+</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV1_BIG_RIGHT')">++</button>
+                </div>
             </div>
             <div class="info-box">
                 <div class="label">NAV2</div>
                 <div class="value" id="info-nav2">---.--</div>
+                <div class="knob-row">
+                    <button class="knob-btn" onclick="sendKnob('NAV2_BIG_LEFT')">−−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_SMALL_LEFT')">−</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_SWAP')">⇄</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_SMALL_RIGHT')">+</button>
+                    <button class="knob-btn" onclick="sendKnob('NAV2_BIG_RIGHT')">++</button>
+                </div>
             </div>
-                        <div class="info-box">
+            <div class="info-box">
                 <div class="label">BARO</div>
                 <div class="value" id="info-baro">----</div>
+                <div class="knob-row">
+                    <button class="knob-btn" onclick="sendKnob('BARO_LEFT')">−</button>
+                    <button class="knob-btn" onclick="sendKnob('BARO_RIGHT')">+</button>
+                </div>
             </div>
             <div class="info-box">
                 <div class="label">OAT</div>
@@ -125,11 +148,9 @@
                 <div class="value" id="info-wind" style="font-size:11px;">---°/--kt</div>
             </div>
         </div>
-
         <div id="pfd-section">
             <canvas id="pfd-canvas" width="600" height="600"></canvas>
         </div>
-
         <div id="center-column">
             <div class="softkey active">PFD</div>
             <div class="softkey">INSET</div>
@@ -143,7 +164,6 @@
             </div>
         </div>
     </div>
-
     <script>
     const canvas = document.getElementById('pfd-canvas');
     const ctx = canvas.getContext('2d');
@@ -157,7 +177,6 @@
     const H = canvas.height;
     const CX = W / 2;
     const CY = H / 2;
-
     let d = {};
     let smooth = {
         pitch: 0, roll: 0, airspeed: 0,
@@ -165,9 +184,9 @@
         baro_pressure: 1013, turn_rate: 0, slip_ball: 0,
         nav1_freq: 0, nav2_freq: 0
     };
-	let smoothHdgBug = 0;
+    let smoothHdgBug = 0;
     let lastHdgBug = null;
-    const SMOOTH_FACTOR = 0.35; // Adjusted slightly for smoother high-frequency transitions
+    const SMOOTH_FACTOR = 0.35;
     let frameCount = 0;
     let lastFpsTime = performance.now();
     let prevAirspeed = null;
@@ -176,11 +195,18 @@
     let prevAltitudeTime = null;
     let cachedAltTrendY = 300;
     let isAltTrendActive = false;
-	
-
-    // Persistent state variables for continuous frame-by-frame rendering
-    let cachedTrendY = 300; // Defaults to middle of tape
+    let cachedTrendY = 300;
     let isTrendActive = false;
+
+    // =====================================================
+    // SEND KNOB COMMAND TO SERVER
+    // =====================================================
+    function sendKnob(cmd) {
+        if (socket && socket.connected) {
+            socket.emit('knob_command', { cmd: cmd });
+            console.log('[KNOB] Sent: ' + cmd);
+        }
+    }
 
     // WEBSOCKET
     let socket = null;
@@ -209,12 +235,10 @@
             setTimeout(connectWebSocket, 2000);
         }
     }
-
     function updateSideInfo() {
         document.getElementById('info-nav1').textContent = d.nav1_freq ? d.nav1_freq.toFixed(2) : '---.--';
         document.getElementById('info-nav2').textContent = d.nav2_freq ? d.nav2_freq.toFixed(2) : '---.--';
         document.getElementById('info-baro').textContent = d.baro_pressure ? d.baro_pressure.toFixed(1) : '----';
-        // OAT
         var oatEl = document.getElementById('info-oat');
         if (oatEl) {
             if (d.oat !== null && d.oat !== undefined) {
@@ -223,13 +247,11 @@
                 oatEl.textContent = '--°F';
             }
         }
-        // Wind
         var windEl = document.getElementById('info-wind');
         var windBox = document.getElementById('wind-box');
         if (windEl && windBox) {
             if (d.wind_dir !== null && d.wind_dir !== undefined && d.wind_speed !== null && d.wind_speed !== undefined) {
                 var windAngle = Math.round(d.wind_dir);
-                // Show as magnetic heading (subtract magvar if available)
                 if (d.gps_magvar) {
                     windAngle = Math.round(d.wind_dir - d.gps_magvar);
                     if (windAngle < 0) windAngle += 360;
@@ -240,7 +262,6 @@
             }
         }
     }
-
     // FULLSCREEN
     fullscreenBtn.addEventListener('click', function() {
         if (!document.fullscreenElement) {
@@ -254,11 +275,9 @@
     document.addEventListener('fullscreenchange', function() {
         fullscreenBtn.textContent = document.fullscreenElement ? 'Exit FS' : 'Fullscreen';
     });
-	
-	        // SCALE SLIDER - reads from URL parameter if available
+    // SCALE SLIDER
     var scaleSlider = document.getElementById('scale-slider');
     var scaleLabel = document.getElementById('scale-label');
-
     var urlParams = new URLSearchParams(window.location.search);
     var initialScale = urlParams.get('scale');
     if (initialScale) {
@@ -267,13 +286,11 @@
         var initScale = parseInt(initialScale) / 100;
         bezel.style.transform = 'translate(-50%, -50%) scale(' + initScale + ')';
     }
-
     scaleSlider.addEventListener('input', function() {
         var scale = scaleSlider.value / 100;
         scaleLabel.textContent = scaleSlider.value + '%';
         bezel.style.transform = 'translate(-50%, -50%) scale(' + scale + ')';
     });
-	
     let hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 5000);
     document.addEventListener('mousemove', function(e) {
         if (e.clientY < 30) {
@@ -285,7 +302,6 @@
             hideTimeout = setTimeout(() => titleBar.classList.add('hidden'), 500);
         }
     });
-
     // DRAW ATTITUDE INDICATOR
     function drawAttitudeIndicator() {
         var pitch = smooth.pitch || 0;
@@ -328,6 +344,7 @@
         }
         ctx.restore();
         ctx.restore();
+        // Aircraft reference
         ctx.strokeStyle = '#FFFF00';
         ctx.lineWidth = 4;
         ctx.beginPath();
@@ -338,6 +355,7 @@
         ctx.beginPath();
         ctx.arc(CX, CY, 3, 0, Math.PI * 2);
         ctx.fill();
+        // Roll arc
         ctx.strokeStyle = '#FFFFFF';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -351,6 +369,8 @@
             ctx.moveTo(CX + inner * Math.cos(angle), CY + inner * Math.sin(angle));
             ctx.lineTo(CX + outer * Math.cos(angle), CY + outer * Math.sin(angle));
             ctx.stroke();
+        }
+        // Roll pointer
         ctx.save();
         ctx.translate(CX, CY);
         ctx.rotate(-roll * Math.PI / 180);
@@ -361,145 +381,107 @@
         ctx.fill();
         ctx.restore();
 
-    // =====================================================
-    // AUTOPILOT STATUS ANNUNCIATORS
-    // =====================================================
-    ctx.font = 'bold 16px Arial';
-    ctx.textAlign = 'left';
-    var apX = 110;
-    var apY = 120;
-    if (d.ap_master) {
-        ctx.fillStyle = '#00FF00';
-        ctx.fillText('AP', apX, apY);
-        apY += 22;
-    }
-    if (d.ap_hdg_lock) {
-        ctx.fillStyle = '#00FFFF';
-        ctx.fillText('HDG', apX, apY);
-        apY += 22;
-    }
-    if (d.ap_alt_lock) {
-        ctx.fillStyle = '#00FFFF';
-        ctx.fillText('ALT', apX, apY);
-        apY += 22;
-    }
-    if (d.ap_nav_lock) {
-        ctx.fillStyle = '#00FFFF';
-        ctx.fillText('NAV', apX, apY);
-        apY += 22;
-    }
-    if (d.ap_apr_lock) {
-        ctx.fillStyle = '#00FFFF';
-        ctx.fillText('APR', apX, apY);
-        apY += 22;
-    }
+        // AUTOPILOT STATUS ANNUNCIATORS
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'left';
+        var apX = 110;
+        var apY = 120;
+        if (d.ap_master) {
+            ctx.fillStyle = '#00FF00';
+            ctx.fillText('AP', apX, apY);
+            apY += 22;
+        }
+        if (d.ap_hdg_lock) {
+            ctx.fillStyle = '#00FFFF';
+            ctx.fillText('HDG', apX, apY);
+            apY += 22;
+        }
+        if (d.ap_alt_lock) {
+            ctx.fillStyle = '#00FFFF';
+            ctx.fillText('ALT', apX, apY);
+            apY += 22;
+        }
+        if (d.ap_nav_lock) {
+            ctx.fillStyle = '#00FFFF';
+            ctx.fillText('NAV', apX, apY);
+            apY += 22;
+        }
+        if (d.ap_apr_lock) {
+            ctx.fillStyle = '#00FFFF';
+            ctx.fillText('APR', apX, apY);
+            apY += 22;
+        }
         if (d.ap_vs_lock) {
-        ctx.fillStyle = '#00FFFF';
-        ctx.fillText('VS', apX, apY);
+            ctx.fillStyle = '#00FFFF';
+            ctx.fillText('VS', apX, apY);
+        }
     }
-    }
-	
-    // =====================================================
+
     // FLIGHT DIRECTOR BARS
-    // =====================================================
     function drawFlightDirector() {
         if (!d.ap_master && !d.ap_fdir_pitch && !d.ap_fdir_bank) return;
-
         var fdirBank = d.ap_fdir_bank || 0;
         var fdirPitch = d.ap_fdir_pitch || 0;
-
-        // Only show if flight director is actually active
-        // (non-zero pitch/bank command or AP master on)
         if (fdirBank === 0 && fdirPitch === 0 && !d.ap_master) return;
-
-        // Scale: bank bar moves left/right, pitch bar moves up/down
-        // Full-scale deflection ~25° = 80 pixels
         var bankOffset = (fdirBank / 25) * 80;
         bankOffset = Math.max(-80, Math.min(80, bankOffset));
         var pitchOffset = (fdirPitch / 20) * 80;
         pitchOffset = Math.max(-80, Math.min(80, pitchOffset));
-
-        // Draw the two magenta command bars (inverted V / chevron shape)
-        // The bars are angled toward each other, pointing up — like »
-        // You fly TOWARD the intersection point to follow the FD
         ctx.strokeStyle = '#FF00FF';
         ctx.lineWidth = 5;
-
-        // The command target is where bankOffset and pitchOffset meet
         var targetX = CX + bankOffset;
         var targetY = CY - pitchOffset;
-
-        // Left bar: angled from lower-left up to the target
         ctx.beginPath();
         ctx.moveTo(targetX - 70, targetY + 70);
         ctx.lineTo(targetX - 20, targetY + 20);
         ctx.stroke();
-
-        // Right bar: angled from lower-right up to the target
         ctx.beginPath();
         ctx.moveTo(targetX + 70, targetY + 70);
         ctx.lineTo(targetX + 20, targetY + 20);
         ctx.stroke();
-    }	
-
-// =====================================================
-// CDI NEEDLE (Course Deviation Indicator)
-// =====================================================
-function drawCDI() {
-    // Determine which CDI source is active
-    var cdiValue = 0;
-    var hasSignal = false;
-
-    if (d.gps_cdi) {
-        // GPS mode: use cross-track error instead of NAV_CDI
-        // GPS_WP_CROSS_TRK reports nautical miles off course
-        // Full-scale deflection = 5 nm (typical GPS sensitivity)
-        var crossTrk = d.gps_cross_trk || 0;
-        cdiValue = (crossTrk / 5.0) * 127;
-        hasSignal = true;
-    } else if (d.nav1_signal) {
-        // NAV1 VOR mode: use traditional NAV_CDI (-127 to +127)
-        cdiValue = d.nav1_cdi || 0;
-        hasSignal = true;
     }
 
-    if (!hasSignal) return;
-
-    // Map to pixels: full deflection = ±100px from center
-    var deflection = Math.max(-127, Math.min(127, cdiValue));
-    var needleOffset = (deflection / 127) * 100;
-
-    // Draw the CDI needle — horizontal magenta line that moves up/down
-    ctx.strokeStyle = '#FF00FF';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(CX - 120, CY - needleOffset);
-    ctx.lineTo(CX - 30, CY - needleOffset);
-    ctx.moveTo(CX + 30, CY - needleOffset);
-    ctx.lineTo(CX + 120, CY - needleOffset);
-    ctx.stroke();
-
-    // Draw dots (deviation scale) — 4 dots above and below center
-    ctx.fillStyle = '#FFFFFF';
-    for (var dot = -2; dot <= 2; dot++) {
-        if (dot === 0) continue;
-        var dotY = CY + dot * 30;
-        // Only draw dots within the attitude circle
-        if (Math.abs(dotY - CY) < 200) {
-            ctx.beginPath();
-            ctx.arc(CX, dotY, 3, 0, Math.PI * 2);
-            ctx.fill();
+    // CDI NEEDLE
+    function drawCDI() {
+        var cdiValue = 0;
+        var hasSignal = false;
+        if (d.gps_cdi) {
+            var crossTrk = d.gps_cross_trk || 0;
+            cdiValue = (crossTrk / 5.0) * 127;
+            hasSignal = true;
+        } else if (d.nav1_signal) {
+            cdiValue = d.nav1_cdi || 0;
+            hasSignal = true;
+        }
+        if (!hasSignal) return;
+        var deflection = Math.max(-127, Math.min(127, cdiValue));
+        var needleOffset = (deflection / 127) * 100;
+        ctx.strokeStyle = '#FF00FF';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(CX - 120, CY - needleOffset);
+        ctx.lineTo(CX - 30, CY - needleOffset);
+        ctx.moveTo(CX + 30, CY - needleOffset);
+        ctx.lineTo(CX + 120, CY - needleOffset);
+        ctx.stroke();
+        ctx.fillStyle = '#FFFFFF';
+        for (var dot = -2; dot <= 2; dot++) {
+            if (dot === 0) continue;
+            var dotY = CY + dot * 30;
+            if (Math.abs(dotY - CY) < 200) {
+                ctx.beginPath();
+                ctx.arc(CX, dotY, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
     }
-}
 
-        // DRAW AIRSPEED TAPE
+    // DRAW AIRSPEED TAPE
     function drawAirspeedTape() {
         var as = smooth.airspeed || 0;
         var x = 20, tapeTop = 100, tapeBottom = 500;
         var tapeMid = (tapeTop + tapeBottom) / 2;
         var range = 40, pxPerKt = (tapeBottom - tapeTop) / (range * 2);
-
         ctx.fillStyle = '#111'; ctx.fillRect(x, tapeTop, 80, tapeBottom - tapeTop);
         ctx.strokeStyle = '#FFF'; ctx.lineWidth = 2;
         ctx.strokeRect(x, tapeTop, 80, tapeBottom - tapeTop);
@@ -508,20 +490,15 @@ function drawCDI() {
         ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial';
         for (var kt = Math.floor(as - range); kt <= Math.ceil(as + range); kt += 10) {
             var y = tapeMid - (kt - as) * pxPerKt;
-            // Draw tick marks (clip handles cutoff)
             ctx.beginPath(); ctx.moveTo(x + 80, y); ctx.lineTo(x + 80 - 20, y); ctx.stroke();
-            // Draw numbers
             ctx.textAlign = 'left';
             ctx.fillText(kt + '', x + 5, y + 4);
         }
         ctx.restore();
-
         ctx.fillStyle = '#000'; ctx.fillRect(x - 5, tapeMid - 15, 90, 30);
         ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
         ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'right';
         ctx.fillText(Math.round(as) + '', x + 80, tapeMid + 6);
-
-        // Airspeed trend arrow (magenta)
         var now = performance.now();
         if (prevAirspeed !== null && prevAirspeedTime !== null) {
             var dt = (now - prevAirspeedTime) / 1000;
@@ -538,7 +515,6 @@ function drawCDI() {
             prevAirspeed = smooth.airspeed;
             prevAirspeedTime = now;
         }
-
         if (isTrendActive) {
             ctx.strokeStyle = '#FF00FF'; ctx.fillStyle = '#FF00FF'; ctx.lineWidth = 4;
             ctx.beginPath();
@@ -560,9 +536,7 @@ function drawCDI() {
         }
     }
 
-    // =====================================================
     // DRAW ALTITUDE TAPE
-    // =====================================================
     function drawAltitudeTape() {
         var alt = smooth.altitude || 0;
         var x = W - 100, tapeTop = 100, tapeBottom = 500;
@@ -585,8 +559,6 @@ function drawCDI() {
         ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(x - 5, tapeMid - 15, 90, 30);
         ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'right';
         ctx.fillText(Math.round(alt) + '', x + 80, tapeMid + 6);
-
-        // Altitude trend arrow (magenta) — predicts altitude in 6 seconds
         var altNow = performance.now();
         if (prevAltitude !== null && prevAltitudeTime !== null) {
             var altDt = (altNow - prevAltitudeTime) / 1000;
@@ -603,7 +575,6 @@ function drawCDI() {
             prevAltitude = smooth.altitude;
             prevAltitudeTime = altNow;
         }
-
         if (isAltTrendActive) {
             ctx.strokeStyle = '#FF00FF'; ctx.fillStyle = '#FF00FF'; ctx.lineWidth = 4;
             ctx.beginPath();
@@ -634,16 +605,6 @@ function drawCDI() {
         ctx.save();
         ctx.beginPath(); ctx.rect(0, tapeTop, W, tapeBottom - tapeTop); ctx.clip();
         ctx.strokeStyle = '#FFF'; ctx.fillStyle = '#FFF'; ctx.font = '12px Arial'; ctx.textAlign = 'center';
-        // IMPORTANT: snap the starting tick to a true multiple of 5. Using
-        // Math.floor(heading - range) directly (the old code) floors
-        // whatever fractional value heading happens to have at that
-        // instant, so the tick sequence's "phase" drifts randomly frame
-        // to frame as heading smoothly changes. Since labels only draw on
-        // deg % 10 === 0, an unaligned phase means some frames have NO
-        // tick landing on a multiple of 10 at all -- that's the reported
-        // "numbers flicker in and out" bug. Snapping here guarantees the
-        // sequence always includes true compass multiples of 5 (and thus
-        // of 10), every frame, regardless of heading's fractional part.
         var startDeg = Math.floor((heading - range) / 5) * 5;
         for (var deg = startDeg; deg <= heading + range; deg += 5) {
             var actualDeg = deg;
@@ -667,10 +628,9 @@ function drawCDI() {
         ctx.strokeStyle = '#FF00FF'; ctx.lineWidth = 2; ctx.strokeRect(CX - 30, tapeMid - 15, 60, 30);
         ctx.fillStyle = '#FFFFFF'; ctx.font = '20px Arial'; ctx.textAlign = 'center';
         ctx.fillText(Math.round(heading) + '', CX, tapeMid + 6);
-                ctx.fillStyle = '#FFFF00';
+        ctx.fillStyle = '#FFFF00';
         ctx.beginPath(); ctx.moveTo(CX - 8, tapeTop); ctx.lineTo(CX + 8, tapeTop); ctx.lineTo(CX, tapeTop + 12);
         ctx.closePath(); ctx.fill();
-
         // Heading Bug (cyan marker)
         var hdgBug = smoothHdgBug || 0;
         var diff = hdgBug - heading;
@@ -678,7 +638,6 @@ function drawCDI() {
         if (diff < -180) diff += 360;
         var bugX = CX + diff * pxPerDeg;
         if (bugX > 0 && bugX < W) {
-            // Draw S-shaped bug marker (cyan)
             ctx.fillStyle = '#00FFFF';
             ctx.strokeStyle = '#00FFFF';
             ctx.lineWidth = 2;
@@ -690,8 +649,6 @@ function drawCDI() {
             ctx.lineTo(bugX + 6, tapeTop - 6);
             ctx.closePath();
             ctx.fill();
-
-            // Draw bug line down to the tape
             ctx.beginPath();
             ctx.moveTo(bugX, tapeTop + 2);
             ctx.lineTo(bugX, tapeTop + 20);
@@ -699,7 +656,7 @@ function drawCDI() {
         }
     }
 
-    // DRAW VSI (separate canvas)
+    // DRAW VSI
     function drawVSI() {
         var vs = smooth.vertical_speed || 0;
         var c = vsiCanvas;
@@ -735,29 +692,18 @@ function drawCDI() {
                 smooth[key] += (d[key] - smooth[key]) * lerpFactor;
             }
         }
-		
-	    // Smooth heading bug with 0/360 wraparound
         if (d.hdg_bug !== undefined && d.hdg_bug !== null) {
             var bugDeg = d.hdg_bug;
-            // AUTOPILOT_HEADING_LOCK_DIR appears to be reported relative to
-            // TRUE north, while heading_mag (and this tape) are MAGNETIC --
-            // the same true/magnetic mismatch already handled for wind
-            // direction in updateSideInfo() above. Subtracting magvar
-            // converts it to the same magnetic frame the tape uses, so the
-            // bug marker should land exactly under the magenta box once
-            // the aircraft reaches the selected heading. If it's now off
-            // in the OTHER direction instead, flip this to
-            // "bugDeg + d.gps_magvar".
             if (d.gps_magvar !== undefined && d.gps_magvar !== null) {
                 bugDeg = bugDeg - d.gps_magvar;
                 if (bugDeg < 0) bugDeg += 360;
                 if (bugDeg >= 360) bugDeg -= 360;
             }
             smoothHdgBug = bugDeg;
-        }	
+        }
         ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
         drawAttitudeIndicator();
-		drawFlightDirector();
+        drawFlightDirector();
         drawAirspeedTape();
         drawAltitudeTape();
         drawHeadingTape();
@@ -770,7 +716,6 @@ function drawCDI() {
         }
         requestAnimationFrame(render);
     }
-
     // STARTUP
     connectWebSocket();
     render();
