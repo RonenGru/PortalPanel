@@ -31,7 +31,7 @@ DATA_REFRESH_MS = 50  # How often to read SimConnect (ms)
 # =====================================================================
 app = Flask(__name__, static_folder=WEB_DIR, static_url_path="/static")
 app.config["SECRET_KEY"] = "portalpanel-secret"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="eventlet")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # =====================================================================
 # INSTRUMENT DATA STORE

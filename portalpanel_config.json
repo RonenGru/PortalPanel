@@ -1,5 +1,5 @@
 {
-    "display_type": "combined",
-    "monitor_index": 1,
+    "display_type": "mfd",
+    "monitor_index": 0,
     "scale": 130
 }
