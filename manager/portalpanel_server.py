@@ -8,7 +8,7 @@ import os
 import time
 import json
 import threading
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, send_from_directory, request
 from flask_socketio import SocketIO
 
 # Try to import SimConnect
@@ -399,6 +399,140 @@ def api_aircraft():
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
+# =====================================================================
+# NEAREST AIRPORTS (OurAirports CSV)
+# =====================================================================
+import csv as csv_module
+import math as math_module
+
+AIRPORTS_CSV = os.path.normpath(os.path.join(BASE_DIR, "..", "data", "airports.csv"))
+g_airports = []  # List of airport dicts loaded into memory
+g_airports_loaded = False
+
+def load_airports():
+    """Load airports.csv into memory once at server startup."""
+    global g_airports, g_airports_loaded
+    if g_airports_loaded:
+        return
+    if not os.path.exists(AIRPORTS_CSV):
+        print("[AIRPORTS] airports.csv not found at {}".format(AIRPORTS_CSV))
+        return
+    try:
+        with open(AIRPORTS_CSV, "r", encoding="utf-8", newline="") as f:
+            reader = csv_module.DictReader(f)
+            count = 0
+            for row in reader:
+                try:
+                    airport_type = row.get("type", "").strip().lower()
+                    # Skip heliports and seaplane bases — keep only real airports
+                    if airport_type in ("heliport", "seaplane_base", "closed"):
+                        continue
+                    lat = float(row.get("latitude_deg", 0))
+                    lon = float(row.get("longitude_deg", 0))
+                    ident = row.get("ident", row.get("gps_code", "")).strip()
+                    name = row.get("name", "").strip()
+                    if not ident or not name:
+                        continue
+                    g_airports.append({
+                        "ident": ident,
+                        "name": name,
+                        "lat": lat,
+                        "lon": lon,
+                        "type": airport_type,
+                        "size": "L" if "large" in airport_type else ("M" if "medium" in airport_type else "S")
+                    })
+                    count += 1
+                except (ValueError, TypeError):
+                    continue
+        g_airports_loaded = True
+        print("[AIRPORTS] Loaded {} airports into memory".format(count))
+    except Exception as e:
+        print("[AIRPORTS] Error loading airports.csv: {}".format(e))
+
+def haversine_nm(lat1, lon1, lat2, lon2):
+    """Calculate distance between two points in nautical miles."""
+    R_nm = 3440.065  # Earth radius in nautical miles
+    dlat = math_module.radians(lat2 - lat1)
+    dlon = math_module.radians(lon2 - lon1)
+    a = (math_module.sin(dlat / 2) ** 2 +
+         math_module.cos(math_module.radians(lat1)) *
+         math_module.cos(math_module.radians(lat2)) *
+         math_module.sin(dlon / 2) ** 2)
+    c = 2 * math_module.atan2(math_module.sqrt(a), math_module.sqrt(1 - a))
+    return R_nm * c
+
+@app.route("/api/airports")
+def api_airports():
+    """Return airports within range of the aircraft's current position."""
+    if not g_airports_loaded:
+        load_airports()
+    if not g_airports_loaded or not g_airports:
+        return jsonify({"airports": [], "error": "No airport data loaded"})
+    # Get current aircraft position
+    with g_data_lock:
+        data = dict(g_instrument_data)
+    lat = data.get("latitude")
+    lon = data.get("longitude")
+    if lat is None or lon is None:
+        return jsonify({"airports": [], "error": "No GPS position"})
+    # Find airports within 50 nm
+    nearby = []
+    for airport in g_airports:
+        dist = haversine_nm(lat, lon, airport["lat"], airport["lon"])
+        if dist <= 50.0:
+            bearing = math_module.degrees(
+                math_module.atan2(
+                    math_module.sin(math_module.radians(airport["lon"] - lon)) *
+                    math_module.cos(math_module.radians(airport["lat"])),
+                    math_module.cos(math_module.radians(lat)) *
+                    math_module.sin(math_module.radians(airport["lat"])) -
+                    math_module.sin(math_module.radians(lat)) *
+                    math_module.cos(math_module.radians(airport["lat"])) *
+                    math_module.cos(math_module.radians(airport["lon"] - lon))
+                )
+            )
+            bearing = (bearing + 360) % 360
+            nearby.append({
+                "ident": airport["ident"],
+                "name": airport["name"],
+                "lat": airport["lat"],
+                "lon": airport["lon"],
+                "type": airport["type"],
+                "size": airport["size"],
+                "distance": round(dist, 1),
+                "bearing": round(bearing, 0)
+            })
+    # Sort by distance (nearest first)
+    nearby.sort(key=lambda a: a["distance"])
+    # Return top 20 nearest
+    return jsonify({"airports": nearby[:20], "count": len(nearby)})
+
+@app.route("/api/airports/all")
+def api_airports_all():
+    """Return all airports within range (no limit) for map drawing."""
+    if not g_airports_loaded:
+        load_airports()
+    if not g_airports_loaded or not g_airports:
+        return jsonify({"airports": [], "error": "No airport data loaded"})
+    with g_data_lock:
+        data = dict(g_instrument_data)
+    lat = data.get("latitude")
+    lon = data.get("longitude")
+    if lat is None or lon is None:
+        return jsonify({"airports": [], "error": "No GPS position"})
+    nearby = []
+    for airport in g_airports:
+        dist = haversine_nm(lat, lon, airport["lat"], airport["lon"])
+        if dist <= 50.0:
+            nearby.append({
+                "ident": airport["ident"],
+                "lat": airport["lat"],
+                "lon": airport["lon"],
+                "size": airport["size"],
+                "distance": round(dist, 1)
+            })
+    nearby.sort(key=lambda a: a["distance"])
+    return jsonify({"airports": nearby, "count": len(nearby)})
 
 @app.route("/api/monitors")
 def api_monitors():
@@ -474,6 +608,15 @@ def handle_knob_command(data):
             event()
     except Exception as e:
         print("[KNOB] Error writing to SimConnect: {}".format(e))
+
+@socketio.on("nrst_toggle")
+def handle_nrst_toggle(data):
+    """Relay NRST airport-overlay toggle to all OTHER connected clients.
+    skip_sid excludes the sender -- the sender already updated its own
+    UI locally when the button was clicked, so echoing the event back
+    to it is unnecessary and, if anything downstream reacts to it,
+    can create an infinite toggle-emit-receive-toggle loop."""
+    socketio.emit("nrst_state", {"show": data.get("show", False)}, skip_sid=request.sid)
 
 @socketio.on("connect")
 def on_connect():

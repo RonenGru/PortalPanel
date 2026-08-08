@@ -124,6 +124,22 @@
             background: #2a2200;
             color: #FFDD00;
         }
+		
+		#mode-layout {
+            background: #1a1500;
+            color: #CCAA00;
+            border-color: #4a3f00;
+        }
+        #mode-layout:hover {
+            background: #2a2200;
+            color: #FFDD00;
+        }
+        #mode-nrst.active {
+            background: #002244;
+            color: #00AAFF;
+            border-color: #0066AA;
+        }
+		
         /* ENGINE VIEW */
         #engine-view { display: block; }
         #map-view { display: none; }
@@ -374,6 +390,7 @@
                 <div id="map-mode-tabs">
                     <div class="mode-tab active" id="mode-vector" onclick="switchMapMode('vector')">VECTOR</div>
                     <div class="mode-tab" id="mode-tiles" onclick="switchMapMode('tiles')">TILES</div>
+                    <div class="mode-tab" id="mode-nrst" onclick="toggleAirports()">NRST</div>
                     <div class="mode-tab" id="mode-layout" onclick="toggleLayout()">&#10530; WIDE</div>
                 </div>
 
@@ -478,6 +495,11 @@
                 initTileMap();
             } else {
                 tileMap.resize();
+                // Force an immediate airport-layer refresh -- otherwise this
+                // waits on the next instrument_data tick, and if the map was
+                // hidden (display:none) when data last changed, MapLibre may
+                // not have applied it while invisible.
+                updateTileMapAirports();
             }
         }
     }
@@ -581,6 +603,176 @@
         document.getElementById('map-alt').textContent = Math.round(alt) + 'ft';
         document.getElementById('map-lat').textContent = isValidCoord(lat, lon) ? lat.toFixed(5) : '---';
         document.getElementById('map-lon').textContent = isValidCoord(lat, lon) ? lon.toFixed(5) : '---';
+    }
+	
+	// =====================================================
+    // NEAREST AIRPORTS
+    // =====================================================
+    let nearbyAirports = [];
+    let showAirports = false;
+    let airportFetchTime = 0;
+    const AIRPORT_FETCH_INTERVAL = 10000; // refresh every 10 seconds
+
+    function fetchNearbyAirports() {
+        var now = Date.now();
+        if (!showAirports) return;
+        if (now - airportFetchTime < AIRPORT_FETCH_INTERVAL) return;
+        airportFetchTime = now;
+        fetch('http://127.0.0.1:8090/api/airports/all')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                nearbyAirports = data.airports || [];
+            })
+            .catch(function(err) { console.error('[AIRPORTS] Error:', err); });
+    }
+
+        function toggleAirports() {
+        showAirports = !showAirports;
+        console.log('[NRST] Toggled, showAirports = ' + showAirports);
+        var btn = document.getElementById('mode-nrst');
+        if (showAirports) {
+            if (btn) btn.classList.add('active');
+            airportFetchTime = 0;
+            fetchNearbyAirports();
+        } else {
+            if (btn) btn.classList.remove('active');
+            nearbyAirports = [];
+            updateTileMapAirports();
+        }
+        if (socket && socket.connected) {
+            socket.emit('nrst_toggle', { show: showAirports });
+        }
+    }
+
+    function drawAirportsOnVectorMap() {
+        if (!showAirports || nearbyAirports.length === 0) return;
+        var lat = d.latitude;
+        var lon = d.longitude;
+        var heading = d.heading_mag || 0;
+        if (!isValidCoord(lat, lon)) return;
+
+        for (var i = 0; i < nearbyAirports.length; i++) {
+            var airport = nearbyAirports[i];
+            var dLatNm = (airport.lat - lat) * 60;
+            var dLonNm = (airport.lon - lon) * 60 * Math.cos(lat * Math.PI / 180);
+            var rad = -heading * Math.PI / 180;
+            var rotX = dLonNm * Math.cos(rad) - dLatNm * Math.sin(rad);
+            var rotY = dLonNm * Math.sin(rad) + dLatNm * Math.cos(rad);
+            var px = MCX + rotX * mapPxPerNm;
+            var py = MCY - rotY * mapPxPerNm;
+
+            // Only draw if within visible map area
+            if (px < 0 || px > MW || py < 0 || py > MH) continue;
+
+            // Draw airport symbol based on size
+            if (airport.size === 'L') {
+                // Large airport: blue filled circle
+                mapCtx.fillStyle = '#00AAFF';
+                mapCtx.beginPath();
+                mapCtx.arc(px, py, 6, 0, Math.PI * 2);
+                mapCtx.fill();
+            } else if (airport.size === 'M') {
+                // Medium airport: blue circle outline
+                mapCtx.strokeStyle = '#00AAFF';
+                mapCtx.lineWidth = 2;
+                mapCtx.beginPath();
+                mapCtx.arc(px, py, 5, 0, Math.PI * 2);
+                mapCtx.stroke();
+            } else {
+                // Small airport: blue X
+                mapCtx.strokeStyle = '#00AAFF';
+                mapCtx.lineWidth = 1.5;
+                mapCtx.beginPath();
+                mapCtx.moveTo(px - 4, py - 4);
+                mapCtx.lineTo(px + 4, py + 4);
+                mapCtx.moveTo(px + 4, py - 4);
+                mapCtx.lineTo(px - 4, py + 4);
+                mapCtx.stroke();
+            }
+
+            // Draw identifier label
+            if (airport.distance < mapRange) {
+                mapCtx.fillStyle = '#00AAFF';
+                mapCtx.font = '9px Courier New';
+                mapCtx.textAlign = 'left';
+                mapCtx.fillText(airport.ident, px + 8, py + 3);
+            }
+        }
+    }
+
+        function updateTileMapAirports() {
+        console.log('[AIRPORTS-DEBUG] updateTileMapAirports called. tileMap=', !!tileMap, 'tileMapReady=', tileMapReady, 'showAirports=', showAirports, 'nearbyAirports.length=', nearbyAirports.length);
+        if (!tileMap || !tileMapReady) return;
+        try {
+        if (!showAirports) {
+            if (tileMap.getLayer('airport-labels')) {
+                tileMap.removeLayer('airport-labels');
+            }
+            if (tileMap.getLayer('airport-markers')) {
+                tileMap.removeLayer('airport-markers');
+            }
+            if (tileMap.getSource('airport-data')) {
+                tileMap.removeSource('airport-data');
+            }
+            return;
+        }
+
+        var features = nearbyAirports.map(function(a) {
+            var color = a.size === 'L' ? '#00AAFF' : (a.size === 'M' ? '#0088CC' : '#006699');
+            var size = a.size === 'L' ? 10 : (a.size === 'M' ? 7 : 5);
+            return {
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
+                properties: { ident: a.ident, color: color, size: size }
+            };
+        });
+
+        if (tileMap.getLayer('airport-markers')) {
+            tileMap.getSource('airport-data').setData({
+                type: 'FeatureCollection',
+                features: features
+            });
+        } else {
+            tileMap.addSource('airport-data', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: features }
+            });
+            tileMap.addLayer({
+                id: 'airport-markers',
+                type: 'circle',
+                source: 'airport-data',
+                paint: {
+                    'circle-color': ['get', 'color'],
+                    'circle-radius': ['get', 'size'],
+                    'circle-stroke-color': '#FFFFFF',
+                    'circle-stroke-width': 1
+                }
+            });
+			
+		
+            // Add text labels showing airport identifiers
+            tileMap.addLayer({
+                id: 'airport-labels',
+                type: 'symbol',
+                source: 'airport-data',
+                layout: {
+                    'text-field': ['get', 'ident'],
+                    'text-size': 11,
+                    'text-offset': [1, 0],
+                    'text-anchor': 'left',
+                    'text-allow-overlap': true
+                },
+                paint: {
+                    'text-color': '#00AAFF',
+                    'text-halo-color': '#000000',
+                    'text-halo-width': 2
+                }
+            });	
+        }
+        console.log('[AIRPORTS-DEBUG] Layer update complete. Source exists:', !!tileMap.getSource('airport-data'), 'Layer exists:', !!tileMap.getLayer('airport-markers'), 'Features added:', nearbyAirports.length);
+        } catch (e) {
+            console.error('[AIRPORTS] Tile map layer error:', e);
+        }
     }
 
     // =====================================================
@@ -724,7 +916,12 @@
             mapCtx.shadowBlur = 0; // reset -- otherwise this glow would bleed into the aircraft symbol below
         }
         
+                // --- Nearby airports ---
+        drawAirportsOnVectorMap();
+
         // --- Aircraft symbol (center, pointing up) ---
+		
+		// --- Aircraft symbol (center, pointing up) ---
         mapCtx.fillStyle = '#FFFF00';
         mapCtx.strokeStyle = '#FFFF00';
         mapCtx.lineWidth = 2;
@@ -737,7 +934,7 @@
         mapCtx.fill();
     }
     
-    function renderMap() {
+    function renderMap() { fetchNearbyAirports();
         if (document.getElementById('vector-map-container').style.display !== 'none' &&
             document.getElementById('map-view').style.display !== 'none') {
             resizeVectorCanvas();
@@ -819,6 +1016,7 @@
 
         var coords = mapTrail.map(function (p) { return [p.lon, p.lat]; });
         coords.push(center);
+		updateTileMapAirports();
         var source = tileMap.getSource('trail');
         if (source) {
             source.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords } });
@@ -848,6 +1046,20 @@
         try {
             socket = io('http://127.0.0.1:8090');
             socket.on('connect', function() { console.log('[WS] Connected'); });
+            socket.on('nrst_state', function(payload) {
+    var newShow = !!payload.show;
+    if (newShow === showAirports) return;
+    showAirports = newShow;
+    var btn = document.getElementById('mode-nrst');
+    if (btn) btn.classList.toggle('active', showAirports);
+    if (showAirports) {
+        airportFetchTime = 0;
+        fetchNearbyAirports();
+    } else {
+        nearbyAirports = [];
+        updateTileMapAirports();
+    }
+});
             socket.on('instrument_data', function(payload) {
                 d = payload.data || {};
                 if (payload.status) {

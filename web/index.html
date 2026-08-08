@@ -121,6 +121,7 @@
         .softkey:hover { background: #2a2a2a; color: #aaa; border-color: #555; }
         .softkey:active { background: #333; color: #fff; }
         .softkey.active { background: #003344; color: #00FFFF; border-color: #006677; }
+		.softkey.nrst-active { background: #002244; color: #00AAFF; border-color: #0066AA; }
         #vsi-box {
             margin-top: 8px;
             display: flex;
@@ -222,7 +223,7 @@
             <div class="softkey">INSET</div>
             <div class="softkey">CDI</div>
             <div class="softkey">DME</div>
-            <div class="softkey">NRST</div>
+            <div class="softkey" id="softkey-nrst" onclick="toggleAirports()">NRST</div>
             <div class="softkey">BACK</div>
             <div class="softkey">ENT</div>
             <div id="vsi-box">
@@ -302,6 +303,9 @@
     let cachedTrendY = 300; // Defaults to middle of tape
     let isTrendActive = false;
 
+    // NRST airport overlay state (actual toggle lives on the MFD map)
+    let showAirports = false;
+
     // =====================================================
     // WEBSOCKET
     // =====================================================
@@ -317,10 +321,26 @@
         }
     }
 
+    function toggleAirports() {
+        showAirports = !showAirports;
+        var btn = document.getElementById('softkey-nrst');
+        if (btn) btn.classList.toggle('nrst-active', showAirports);
+        if (socket && socket.connected) {
+            socket.emit('nrst_toggle', { show: showAirports });
+        }
+    }
+
     function connectWebSocket() {
         try {
             socket = io('http://127.0.0.1:8090');
             socket.on('connect', function() { console.log('[WS] Connected'); });
+            socket.on('nrst_state', function(payload) {
+				var newShow = !!payload.show;
+				if (newShow === showAirports) return;
+				showAirports = newShow;
+				var btn = document.getElementById('softkey-nrst');
+				if (btn) btn.classList.toggle('nrst-active', showAirports);
+			});
             socket.on('instrument_data', function(payload) {
                 d = payload.data || {};
                 if (payload.status) {
