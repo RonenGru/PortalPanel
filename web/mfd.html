@@ -612,6 +612,8 @@
     let showAirports = false;
     let airportFetchTime = 0;
     const AIRPORT_FETCH_INTERVAL = 10000; // refresh every 10 seconds
+    let airportsDirty = false; // set true only when data/visibility actually changes
+    let airportMarkers = []; // active maplibregl.Marker instances currently on the tile map
 
     function fetchNearbyAirports() {
         var now = Date.now();
@@ -622,23 +624,31 @@
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 nearbyAirports = data.airports || [];
+                airportsDirty = true; // new data arrived -- allow one tile-map update
             })
             .catch(function(err) { console.error('[AIRPORTS] Error:', err); });
     }
 
-        function toggleAirports() {
+            function toggleAirports() {
         showAirports = !showAirports;
         console.log('[NRST] Toggled, showAirports = ' + showAirports);
         var btn = document.getElementById('mode-nrst');
+        if (btn) btn.classList.toggle('active', showAirports);
+        
         if (showAirports) {
-            if (btn) btn.classList.add('active');
-            airportFetchTime = 0;
+            airportFetchTime = 0; // Force fetch
             fetchNearbyAirports();
+            // Give fetch 200ms to return data, then update the map
+            setTimeout(function() {
+                updateTileMapAirports.lastUpdate = 0; // Force data refresh
+                updateTileMapAirports();
+            }, 200);
         } else {
-            if (btn) btn.classList.remove('active');
-            nearbyAirports = [];
-            updateTileMapAirports();
+            clearAirportMarkers(); // Clear immediately -- bypass updateTileMapAirports()'s
+                                    // dirty/throttle guard entirely, so turning OFF never
+                                    // waits on anything and can't get silently skipped.
         }
+        
         if (socket && socket.connected) {
             socket.emit('nrst_toggle', { show: showAirports });
         }
@@ -700,79 +710,63 @@
         }
     }
 
-        function updateTileMapAirports() {
-        console.log('[AIRPORTS-DEBUG] updateTileMapAirports called. tileMap=', !!tileMap, 'tileMapReady=', tileMapReady, 'showAirports=', showAirports, 'nearbyAirports.length=', nearbyAirports.length);
+    function clearAirportMarkers() {
+        airportMarkers.forEach(function (m) { m.remove(); });
+        airportMarkers = [];
+    }
+
+    function updateTileMapAirports() {
         if (!tileMap || !tileMapReady) return;
-        try {
+        if (!airportsDirty) return;
+        airportsDirty = false;
+
+        // DOM-based markers, not a WebGL circle layer -- this sidesteps
+        // whatever was silently preventing the GL layer from painting
+        // (terrain depth-test, tile compositing timing, etc). Each marker
+        // is a plain styled <div> that MapLibre positions via CSS transform.
+        clearAirportMarkers();
+
         if (!showAirports) {
-            if (tileMap.getLayer('airport-labels')) {
-                tileMap.removeLayer('airport-labels');
-            }
-            if (tileMap.getLayer('airport-markers')) {
-                tileMap.removeLayer('airport-markers');
-            }
-            if (tileMap.getSource('airport-data')) {
-                tileMap.removeSource('airport-data');
-            }
+            console.log('[AIRPORTS] Markers cleared (hidden)');
             return;
         }
 
-        var features = nearbyAirports.map(function(a) {
+        nearbyAirports.forEach(function (a) {
             var color = a.size === 'L' ? '#00AAFF' : (a.size === 'M' ? '#0088CC' : '#006699');
-            var size = a.size === 'L' ? 10 : (a.size === 'M' ? 7 : 5);
-            return {
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [a.lon, a.lat] },
-                properties: { ident: a.ident, color: color, size: size }
-            };
+            var dotSize = a.size === 'L' ? 22 : (a.size === 'M' ? 17 : 12);
+
+            var dot = document.createElement('div');
+            dot.style.width = dotSize + 'px';
+            dot.style.height = dotSize + 'px';
+            dot.style.borderRadius = '50%';
+            dot.style.background = color;
+            dot.style.border = '1px solid #FFFFFF';
+            dot.style.boxShadow = '0 0 3px rgba(0,0,0,0.8)';
+
+            var label = document.createElement('span');
+            label.textContent = a.ident;
+            label.style.color = '#00AAFF';
+            label.style.fontSize = '14px';
+            label.style.fontWeight = 'bold';
+            label.style.fontFamily = "'Courier New', monospace";
+            label.style.textShadow = '0 0 2px #000, 0 0 2px #000';
+            label.style.whiteSpace = 'nowrap';
+            label.style.marginLeft = '3px';
+
+            var wrap = document.createElement('div');
+            wrap.style.display = 'flex';
+            wrap.style.alignItems = 'center';
+            wrap.appendChild(dot);
+            wrap.appendChild(label);
+
+            var marker = new maplibregl.Marker({ element: wrap, anchor: 'center' })
+                .setLngLat([a.lon, a.lat])
+                .addTo(tileMap);
+
+            airportMarkers.push(marker);
         });
 
-        if (tileMap.getLayer('airport-markers')) {
-            tileMap.getSource('airport-data').setData({
-                type: 'FeatureCollection',
-                features: features
-            });
-        } else {
-            tileMap.addSource('airport-data', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: features }
-            });
-            tileMap.addLayer({
-                id: 'airport-markers',
-                type: 'circle',
-                source: 'airport-data',
-                paint: {
-                    'circle-color': ['get', 'color'],
-                    'circle-radius': ['get', 'size'],
-                    'circle-stroke-color': '#FFFFFF',
-                    'circle-stroke-width': 1
-                }
-            });
-			
-		
-            // Add text labels showing airport identifiers
-            tileMap.addLayer({
-                id: 'airport-labels',
-                type: 'symbol',
-                source: 'airport-data',
-                layout: {
-                    'text-field': ['get', 'ident'],
-                    'text-size': 11,
-                    'text-offset': [1, 0],
-                    'text-anchor': 'left',
-                    'text-allow-overlap': true
-                },
-                paint: {
-                    'text-color': '#00AAFF',
-                    'text-halo-color': '#000000',
-                    'text-halo-width': 2
-                }
-            });	
-        }
-        console.log('[AIRPORTS-DEBUG] Layer update complete. Source exists:', !!tileMap.getSource('airport-data'), 'Layer exists:', !!tileMap.getLayer('airport-markers'), 'Features added:', nearbyAirports.length);
-        } catch (e) {
-            console.error('[AIRPORTS] Tile map layer error:', e);
-        }
+        console.log('[AIRPORTS] Added', airportMarkers.length, 'DOM markers');
     }
 
     // =====================================================
@@ -978,7 +972,7 @@
             // automatically, no extra work needed.
         });
 
-        tileMap.on('load', function () {
+                tileMap.on('load', function () {
             tileMap.addSource('trail', {
                 type: 'geojson',
                 data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
@@ -989,8 +983,54 @@
                 source: 'trail',
                 paint: { 'line-color': '#00FF44', 'line-width': 6 }
             });
+
+            // Airport overlay -- created ONCE here, hidden initially.
+            // We only ever toggle visibility and call setData() later.
+            tileMap.addSource('airport-data', {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] }
+            });
+            tileMap.addLayer({
+                id: 'airport-markers',
+                type: 'circle',
+                source: 'airport-data',
+                layout: { 'visibility': 'none' },
+                paint: {
+                    'circle-radius': 12,
+                    'circle-color': '#FF0000', // Bright red like the test!
+                    'circle-stroke-color': '#FFFFFF',
+                    'circle-stroke-width': 2,
+                    'circle-opacity': 1
+                }
+            });
+            tileMap.addLayer({
+                id: 'airport-labels',
+                type: 'symbol',
+                source: 'airport-data',
+                layout: {
+                    'visibility': 'none',
+                    'text-field': ['get', 'ident'],
+                    'text-size': 12,
+                    'text-offset': [1, 0],
+                    'text-anchor': 'left',
+                    'text-allow-overlap': true
+                },
+                paint: {
+                    'text-color': '#FFFFFF',
+                    'text-halo-color': '#000000',
+                    'text-halo-width': 2
+                }
+            });
+
             tileMapReady = true;
             updateTileMap();
+        });
+
+        // MapLibre style load event — ensures custom layers aren't dropped
+        tileMap.on('style.load', function() {
+            if (showAirports) {
+                updateTileMapAirports();
+            }
         });
     }
 
@@ -1070,6 +1110,7 @@
                 recordTrailPoint();
                 updateMapInfoBar();
                 updateTileMap();
+                // updateTileMapAirports() is NO LONGER called here 20x/sec
                 frameCount++;
                 var now = performance.now();
                 if (now - lastFpsTime > 1000) {
