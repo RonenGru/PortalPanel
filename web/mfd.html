@@ -833,7 +833,7 @@
                 source: 'fpl-route',
                 paint: {
                     'line-color': '#FF00FF',
-                    'line-width': 4
+                    'line-width': 8
                 }
             });
             fplTileLineAdded = true;
@@ -849,8 +849,8 @@
         // Add waypoint markers (DOM-based, same approach as airports)
         flightPlanWaypoints.forEach(function(wp) {
             var dot = document.createElement('div');
-            dot.style.width = '8px';
-            dot.style.height = '8px';
+            dot.style.width = '12px';
+            dot.style.height = '12px';
             dot.style.borderRadius = '50%';
             dot.style.background = '#FF00FF';
             dot.style.border = '1px solid #FFFFFF';
@@ -969,7 +969,7 @@
             // Draw magenta dot
             mapCtx.fillStyle = '#FF00FF';
             mapCtx.beginPath();
-            mapCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            mapCtx.arc(p.x, p.y, 6, 0, Math.PI * 2);
             mapCtx.fill();
 
             // Draw identifier label
@@ -981,9 +981,9 @@
 
         // Draw the magenta line connecting waypoints
         mapCtx.strokeStyle = '#FF00FF';
-        mapCtx.lineWidth = 3;
+        mapCtx.lineWidth = 7;
         mapCtx.shadowColor = '#FF00FF';
-        mapCtx.shadowBlur = 4;
+        mapCtx.shadowBlur = 8;
         mapCtx.beginPath();
         var started = false;
         for (var j = 0; j < flightPlanWaypoints.length; j++) {
