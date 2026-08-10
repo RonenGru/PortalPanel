@@ -158,6 +158,22 @@
             justify-content: center;
         }
 		
+		        #mode-fpl {
+            background: #0a0a0a;
+            color: #FF66FF;
+            border-color: #4a004a;
+            font-weight: bold;
+        }
+        #mode-fpl:hover {
+            background: #2a002a;
+            color: #FF99FF;
+        }
+        #mode-fpl.fpl-active {
+            background: #2a002a;
+            color: #FF00FF;
+            border-color: #FF00FF;
+        }
+		
         /* ENGINE VIEW */
         #engine-view { display: block; }
         #map-view { display: none; }
@@ -405,7 +421,7 @@
         <!-- MAP VIEW -->
         <div id="map-view">
             <div id="map-container">
-                                <div id="map-mode-tabs">
+                    <div id="map-mode-tabs">
                     <div class="mode-tab active" id="mode-vector" onclick="switchMapMode('vector')">VECTOR</div>
                     <div class="mode-tab" id="mode-tiles" onclick="switchMapMode('tiles')">TILES</div>
                     <div class="mode-tab" id="mode-nrst" onclick="toggleAirports()">NRST</div>
@@ -413,7 +429,9 @@
                     <div class="mode-tab" id="zoom-out" onclick="mapZoom(-1)" style="flex:0 0 36px; font-size:16px;">&minus;</div>
                     <div class="mode-tab" id="zoom-range-label">20nm</div>
                     <div class="mode-tab" id="zoom-in" onclick="mapZoom(1)" style="flex:0 0 36px; font-size:16px;">&plus;</div>
+                    <div class="mode-tab" id="mode-fpl" onclick="toggleFlightPlan()" oncontextmenu="loadNewFlightPlan(); return false;" style="flex:0 0 40px;" title="Click: toggle on/off | Right-click: load new plan">FPL</div>
                 </div>
+                <input type="file" id="fpl-file-input" accept=".pln" style="display:none;">
 
                 <div id="map-content-row">
                     <div id="vector-map-container">
@@ -629,6 +647,254 @@
     }
 	
 	// =====================================================
+    // FLIGHT PLAN (magenta route line from .pln file)
+    // =====================================================
+    let flightPlanWaypoints = []; // array of {ident, lat, lon, type}
+    let showFlightPlan = false;
+    let fplFileInput = null;
+
+    // Parse DMS coordinate string like "N45° 1' 3.27",W79° 19' 2.63",+001878.53"
+    // Returns {lat: decimal, lon: decimal}
+    function parseDMS(dmsStr) {
+        var parts = dmsStr.split(',');
+        var latStr = parts[0].trim();
+        var lonStr = parts[1].trim();
+
+        // Parse latitude: N45° 1' 3.27"
+        var latMatch = latStr.match(/^([NS])\s*(\d+)°\s*(\d+)'\s*([\d.]+)"/);
+        if (!latMatch) return null;
+        var lat = parseFloat(latMatch[2]) + parseFloat(latMatch[3])/60 + parseFloat(latMatch[4])/3600;
+        if (latMatch[1] === 'S') lat = -lat;
+
+        // Parse longitude: W79° 19' 2.63"
+        var lonMatch = lonStr.match(/^([EW])\s*(\d+)°\s*(\d+)'\s*([\d.]+)"/);
+        if (!lonMatch) return null;
+        var lon = parseFloat(lonMatch[2]) + parseFloat(lonMatch[3])/60 + parseFloat(lonMatch[4])/3600;
+        if (lonMatch[1] === 'W') lon = -lon;
+
+        return { lat: lat, lon: lon };
+    }
+
+    // Parse a .pln XML file and extract waypoints
+    function parseFlightPlan(xmlText) {
+        var parser = new DOMParser();
+        var doc = parser.parseFromString(xmlText, 'text/xml');
+
+        var waypoints = [];
+
+        // Get departure and destination from the top-level fields
+        var depId = doc.querySelector('DepartureID');
+        var destId = doc.querySelector('DestinationID');
+
+        // Get all ATCWaypoint entries
+        var wpNodes = doc.querySelectorAll('ATCWaypoint');
+        for (var i = 0; i < wpNodes.length; i++) {
+            var node = wpNodes[i];
+            var typeEl = node.querySelector('ATCWaypointType');
+            var posEl = node.querySelector('WorldPosition');
+            var icaoEl = node.querySelector('ICAOIdent');
+
+            if (!posEl || !icaoEl) continue;
+
+            var coords = parseDMS(posEl.textContent.trim());
+            if (!coords) continue;
+
+            var wpType = typeEl ? typeEl.textContent.trim() : 'User';
+            var ident = icaoEl.textContent.trim();
+
+            waypoints.push({
+                ident: ident,
+                lat: coords.lat,
+                lon: coords.lon,
+                type: wpType
+            });
+        }
+
+                // If no ATCWaypoint entries found, try departure/destination only
+        // by looking up their coordinates from airports.csv via the server
+        if (waypoints.length === 0 && depId && destId) {
+            console.log('[FPL] No ATCWaypoint entries found in .pln file');
+            // Synchronous fetch using XMLHttpRequest (can't use async/await here
+            // because parseFlightPlan is called from a FileReader callback)
+            var depIdent = depId.textContent.trim();
+            var destIdent = destId.textContent.trim();
+            var url = 'http://127.0.0.1:8090/api/airport/lookup?idents=' +
+                      encodeURIComponent(depIdent + ',' + destIdent);
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', url, false); // synchronous
+                xhr.send();
+                if (xhr.status === 200) {
+                    var data = JSON.parse(xhr.responseText);
+                    var found = data.airports || [];
+                    for (var k = 0; k < found.length; k++) {
+                        var a = found[k];
+                        var wpIdent = a.ident.toUpperCase() === depIdent.toUpperCase() ? depIdent : destIdent;
+                        waypoints.push({
+                            ident: wpIdent,
+                            lat: a.lat,
+                            lon: a.lon,
+                            type: 'Airport'
+                        });
+                    }
+                    // Sort: departure first, destination second
+                    waypoints.sort(function(a, b) {
+                        if (a.ident.toUpperCase() === depIdent.toUpperCase()) return -1;
+                        if (b.ident.toUpperCase() === depIdent.toUpperCase()) return 1;
+                        return 0;
+                    });
+                    console.log('[FPL] Found', waypoints.length, 'airports via lookup');
+                }
+            } catch (e) {
+                console.error('[FPL] Airport lookup failed:', e);
+            }
+        }
+
+        console.log('[FPL] Parsed', waypoints.length, 'waypoints');
+        return waypoints;
+    }
+
+    function loadNewFlightPlan() {
+        // Force-open the file picker regardless of current state
+        if (!fplFileInput) {
+            fplFileInput = document.getElementById('fpl-file-input');
+            // Note: the 'change' event listener is already attached in
+            // toggleFlightPlan's init block, so we just need to click it
+        }
+        fplFileInput.click();
+    }
+
+    function toggleFlightPlan() {
+        if (!showFlightPlan && flightPlanWaypoints.length === 0) {
+            // No plan loaded yet — open file picker
+            if (!fplFileInput) {
+                fplFileInput = document.getElementById('fpl-file-input');
+                fplFileInput.addEventListener('change', function(e) {
+                    var file = e.target.files[0];
+                    if (!file) return;
+                    var reader = new FileReader();
+                                        reader.onload = function(ev) {
+                        flightPlanWaypoints = parseFlightPlan(ev.target.result);
+                        if (flightPlanWaypoints.length > 0) {
+                            showFlightPlan = true;
+                            var btn = document.getElementById('mode-fpl');
+                            if (btn) btn.classList.add('fpl-active');
+                            // Clear old tile map markers/line before adding new ones
+                            if (tileMap && tileMapReady) {
+                                removeFlightPlanFromTileMap();
+                                addFlightPlanToTileMap();
+                            }
+                            console.log('[FPL] Flight plan loaded:', flightPlanWaypoints.length, 'waypoints');
+                        }
+                        // Reset the input so the same file can be re-selected
+                        fplFileInput.value = '';
+                    };
+                    reader.readAsText(file);
+                });
+            }
+            fplFileInput.click();
+        } else if (flightPlanWaypoints.length > 0) {
+            // Toggle show/hide
+            showFlightPlan = !showFlightPlan;
+            var btn = document.getElementById('mode-fpl');
+            if (btn) btn.classList.toggle('fpl-active', showFlightPlan);
+            if (showFlightPlan && tileMap && tileMapReady) {
+                addFlightPlanToTileMap();
+            } else if (!showFlightPlan && tileMap && tileMapReady) {
+                removeFlightPlanFromTileMap();
+            }
+        }
+    }
+
+    // Tile map flight plan rendering using DOM markers and a GeoJSON line
+    let fplTileMarkers = [];
+    let fplTileLineAdded = false;
+
+    function addFlightPlanToTileMap() {
+        if (!tileMap || !tileMapReady) return;
+        removeFlightPlanFromTileMap();
+
+        if (!showFlightPlan || flightPlanWaypoints.length === 0) return;
+
+        // Add the magenta line as a GeoJSON layer
+        if (!fplTileLineAdded) {
+            // Check if source already exists (e.g. from a previous load)
+            if (tileMap.getSource('fpl-route')) {
+                tileMap.removeLayer('fpl-route-line');
+                tileMap.removeSource('fpl-route');
+            }
+            tileMap.addSource('fpl-route', {
+                type: 'geojson',
+                data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }
+            });
+            tileMap.addLayer({
+                id: 'fpl-route-line',
+                type: 'line',
+                source: 'fpl-route',
+                paint: {
+                    'line-color': '#FF00FF',
+                    'line-width': 4
+                }
+            });
+            fplTileLineAdded = true;
+        }
+
+        // Set the line data
+        var coords = flightPlanWaypoints.map(function(wp) { return [wp.lon, wp.lat]; });
+        var source = tileMap.getSource('fpl-route');
+        if (source) {
+            source.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords } });
+        }
+
+        // Add waypoint markers (DOM-based, same approach as airports)
+        flightPlanWaypoints.forEach(function(wp) {
+            var dot = document.createElement('div');
+            dot.style.width = '8px';
+            dot.style.height = '8px';
+            dot.style.borderRadius = '50%';
+            dot.style.background = '#FF00FF';
+            dot.style.border = '1px solid #FFFFFF';
+            dot.style.boxShadow = '0 0 3px rgba(0,0,0,0.8)';
+
+            var label = document.createElement('span');
+            label.textContent = wp.ident;
+            label.style.color = '#FF00FF';
+            label.style.fontSize = '12px';
+            label.style.fontWeight = 'bold';
+            label.style.fontFamily = "'Courier New', monospace";
+            label.style.textShadow = '0 0 2px #000, 0 0 2px #000';
+            label.style.whiteSpace = 'nowrap';
+            label.style.marginLeft = '4px';
+
+            var wrap = document.createElement('div');
+            wrap.style.display = 'flex';
+            wrap.style.alignItems = 'center';
+            wrap.appendChild(dot);
+            wrap.appendChild(label);
+
+            var marker = new maplibregl.Marker({ element: wrap, anchor: 'center' })
+                .setLngLat([wp.lon, wp.lat])
+                .addTo(tileMap);
+            fplTileMarkers.push(marker);
+        });
+        console.log('[FPL] Added', fplTileMarkers.length, 'tile map markers');
+    }
+
+    function removeFlightPlanFromTileMap() {
+        fplTileMarkers.forEach(function(m) { m.remove(); });
+        fplTileMarkers = [];
+        if (tileMap && tileMap.getSource('fpl-route')) {
+            // Clear the line data rather than removing the layer entirely
+            // (removing/re-adding can race with MapLibre's render cycle)
+            tileMap.getSource('fpl-route').setData({
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: [] }
+            });
+        }
+        console.log('[FPL] Removed tile map flight plan');
+    }
+	
+	// =====================================================
     // NEAREST AIRPORTS
     // =====================================================
     let nearbyAirports = [];
@@ -675,6 +941,63 @@
         if (socket && socket.connected) {
             socket.emit('nrst_toggle', { show: showAirports });
         }
+    }
+	
+	function drawFlightPlanOnVectorMap() {
+        if (!showFlightPlan || flightPlanWaypoints.length < 2) return;
+        var lat = d.latitude;
+        var lon = d.longitude;
+        var heading = d.heading_mag || 0;
+        if (!isValidCoord(lat, lon)) return;
+
+        // Transform helper: lat/lon to screen pixel (track-up rotation)
+        function toScreen(wpLat, wpLon) {
+            var dLatNm = (wpLat - lat) * 60;
+            var dLonNm = (wpLon - lon) * 60 * Math.cos(lat * Math.PI / 180);
+            var rad = -heading * Math.PI / 180;
+            var rotX = dLonNm * Math.cos(rad) - dLatNm * Math.sin(rad);
+            var rotY = dLonNm * Math.sin(rad) + dLatNm * Math.cos(rad);
+            return { x: MCX + rotX * mapPxPerNm, y: MCY - rotY * mapPxPerNm };
+        }
+
+        // Draw waypoint markers first (so the line draws on top)
+        for (var i = 0; i < flightPlanWaypoints.length; i++) {
+            var wp = flightPlanWaypoints[i];
+            var p = toScreen(wp.lat, wp.lon);
+            if (p.x < -50 || p.x > MW + 50 || p.y < -50 || p.y > MH + 50) continue;
+
+            // Draw magenta dot
+            mapCtx.fillStyle = '#FF00FF';
+            mapCtx.beginPath();
+            mapCtx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+            mapCtx.fill();
+
+            // Draw identifier label
+            mapCtx.fillStyle = '#FF66FF';
+            mapCtx.font = 'bold 10px Courier New';
+            mapCtx.textAlign = 'left';
+            mapCtx.fillText(wp.ident, p.x + 7, p.y + 3);
+        }
+
+        // Draw the magenta line connecting waypoints
+        mapCtx.strokeStyle = '#FF00FF';
+        mapCtx.lineWidth = 3;
+        mapCtx.shadowColor = '#FF00FF';
+        mapCtx.shadowBlur = 4;
+        mapCtx.beginPath();
+        var started = false;
+        for (var j = 0; j < flightPlanWaypoints.length; j++) {
+            var wp2 = flightPlanWaypoints[j];
+            var p2 = toScreen(wp2.lat, wp2.lon);
+            if (!started) {
+                mapCtx.moveTo(p2.x, p2.y);
+                started = true;
+            } else {
+                mapCtx.lineTo(p2.x, p2.y);
+            }
+        }
+        mapCtx.stroke();
+        mapCtx.shadowBlur = 0;
     }
 
     function drawAirportsOnVectorMap() {
@@ -979,9 +1302,10 @@
             mapCtx.shadowBlur = 0; // reset -- otherwise this glow would bleed into the aircraft symbol below
         }
         
-                // --- Nearby airports ---
+        // --- Nearby airports ---
         drawAirportsOnVectorMap();
-
+        // --- Flight plan route ---
+        drawFlightPlanOnVectorMap();
         // --- Aircraft symbol (center, pointing up) ---
 		
 		// --- Aircraft symbol (center, pointing up) ---

@@ -511,6 +511,25 @@ def api_airports():
     # Return top 20 nearest
     return jsonify({"airports": nearby[:20], "count": len(nearby)})
 
+@app.route("/api/airport/lookup")
+def api_airport_lookup():
+    """Look up airport coordinates by identifier (comma-separated list)."""
+    if not g_airports_loaded:
+        load_airports()
+    idents_raw = request.args.get("idents", "")
+    if not idents_raw:
+        return jsonify({"airports": []})
+    idents = [i.strip().upper() for i in idents_raw.split(",") if i.strip()]
+    results = []
+    for airport in g_airports:
+        if airport["ident"].upper() in idents:
+            results.append({
+                "ident": airport["ident"],
+                "lat": airport["lat"],
+                "lon": airport["lon"]
+            })
+    return jsonify({"airports": results})
+
 @app.route("/api/airports/all")
 def api_airports_all():
     """Return all airports within range (no limit) for map drawing."""
