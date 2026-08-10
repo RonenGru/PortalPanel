@@ -88,6 +88,7 @@ INSTRUMENT_VARS = {
     "gps_cross_trk":        "GPS_WP_CROSS_TRK",
     "gps_wp_distance":      "GPS_WP_DISTANCE",
     "gps_wp_ete":           "GPS_ETE",
+    "gps_wp_id":            "GPS_WP_NEXT_ID",
     # Weather
     "oat":                  "AMBIENT_TEMPERATURE",
     "wind_dir":             "AMBIENT_WIND_DIRECTION",
@@ -196,7 +197,7 @@ def convert_units(raw_data):
     # handling the bytes-vs-str SimConnect quirk described above.
     converted["aircraft_title"] = to_display_str(converted.get("aircraft_title"))
     converted["aircraft_model"] = to_display_str(converted.get("aircraft_model"), default="")
-
+    converted["gps_wp_id"] = to_display_str(converted.get("gps_wp_id"), default="")
     return converted
 
 
@@ -254,6 +255,9 @@ def simconnect_loop():
                 "ap_hdg_lock": 0, "ap_nav_lock": 0, "ap_apr_lock": 0,
                 "ap_vs_lock": 0, "ap_fdir_bank": 0, "ap_fdir_pitch": 0,
                 "nav1_cdi": 0, "nav2_cdi": 0, "gps_cdi": 0,
+                "gps_wp_id": "MOCKWP",
+                "gps_wp_distance": 12.3,
+                "gps_wp_ete": 8.5,
                 "eng_rpm": 2300, "eng_manifold_press": 23.0,
                 "eng_oil_temp": 168.0, "eng_oil_pressure": 50.0,
                 "eng_egt": 1250.0, "eng_cht": 300.0,

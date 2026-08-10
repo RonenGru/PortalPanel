@@ -496,6 +496,62 @@
             }
         }
     }
+	
+	    // =====================================================
+    // GPS WAYPOINT INFO BAR (top of PFD)
+    // =====================================================
+    function drawGPSWaypointInfo() {
+        var wpId = d.gps_wp_id;
+        var wpDist = d.gps_wp_distance;
+        var wpEte = d.gps_wp_ete;
+
+        // Only draw if we have a waypoint identifier
+        if (!wpId) return;
+
+        // Format ETE: if > 60 min show HhMM, otherwise MM:SS
+        var eteStr = '---';
+        if (wpEte !== null && wpEte !== undefined && wpEte > 0) {
+            if (wpEte >= 60) {
+                var hrs = Math.floor(wpEte / 60);
+                var mins = Math.round(wpEte % 60);
+                eteStr = hrs + 'h' + (mins < 10 ? '0' + mins : mins) + 'm';
+            } else {
+                var mins = Math.floor(wpEte);
+                var secs = Math.round((wpEte - mins) * 60);
+                eteStr = (mins < 10 ? '0' + mins : mins) + ':' + (secs < 10 ? '0' + secs : secs);
+            }
+        }
+
+        // Format distance
+        var distStr = (wpDist !== null && wpDist !== undefined) ? wpDist.toFixed(1) + 'nm' : '----';
+
+        // Box dimensions
+        var boxW = 200;
+        var boxH = 22;
+        var boxX = CX - boxW / 2;
+        var boxY = 5;
+
+        // Draw background box
+        ctx.fillStyle = '#000';
+        ctx.fillRect(boxX, boxY, boxW, boxH);
+        ctx.strokeStyle = '#00FF66';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+        // Draw text — identifier, distance, ETE
+        ctx.font = 'bold 12px Courier New';
+        ctx.fillStyle = '#00FF66';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        var padX = boxX + 10;
+        ctx.fillText(wpId, padX, boxY + boxH / 2);
+
+        ctx.textAlign = 'center';
+        ctx.fillText(distStr, CX, boxY + boxH / 2);
+
+        ctx.textAlign = 'right';
+        ctx.fillText(eteStr, boxX + boxW - 10, boxY + boxH / 2);
+    }
 
     // DRAW AIRSPEED TAPE
     function drawAirspeedTape() {
@@ -729,6 +785,7 @@
         drawAltitudeTape();
         drawHeadingTape();
         drawCDI();
+        drawGPSWaypointInfo();
         drawVSI();
         frameCount++;
         if (now - lastFpsTime > 1000) {
