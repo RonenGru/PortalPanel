@@ -120,11 +120,6 @@
             color: #CCAA00;
             border-color: #4a3f00;
         }
-        #mode-layout:hover {
-            background: #2a2200;
-            color: #FFDD00;
-        }
-		
 		#mode-layout {
             background: #1a1500;
             color: #CCAA00;
@@ -134,10 +129,33 @@
             background: #2a2200;
             color: #FFDD00;
         }
+		
         #mode-nrst.active {
             background: #002244;
             color: #00AAFF;
             border-color: #0066AA;
+        }
+		
+		#zoom-in, #zoom-out {
+            background: #001100;
+            color: #00CC00;
+            border-color: #004400;
+            font-weight: bold;
+        }
+        #zoom-in:hover, #zoom-out:hover {
+            background: #002200;
+            color: #00FF00;
+        }
+        #zoom-range-label {
+            flex: 0 0 50px;
+            background: #000;
+            color: #00CC00;
+            font-size: 10px;
+            border-color: #004400;
+            cursor: default;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 		
         /* ENGINE VIEW */
@@ -387,11 +405,14 @@
         <!-- MAP VIEW -->
         <div id="map-view">
             <div id="map-container">
-                <div id="map-mode-tabs">
+                                <div id="map-mode-tabs">
                     <div class="mode-tab active" id="mode-vector" onclick="switchMapMode('vector')">VECTOR</div>
                     <div class="mode-tab" id="mode-tiles" onclick="switchMapMode('tiles')">TILES</div>
                     <div class="mode-tab" id="mode-nrst" onclick="toggleAirports()">NRST</div>
                     <div class="mode-tab" id="mode-layout" onclick="toggleLayout()">&#10530; WIDE</div>
+                    <div class="mode-tab" id="zoom-out" onclick="mapZoom(-1)" style="flex:0 0 36px; font-size:16px;">&minus;</div>
+                    <div class="mode-tab" id="zoom-range-label">20nm</div>
+                    <div class="mode-tab" id="zoom-in" onclick="mapZoom(1)" style="flex:0 0 36px; font-size:16px;">&plus;</div>
                 </div>
 
                 <div id="map-content-row">
@@ -486,11 +507,13 @@
             modeVector.classList.add('active');
             modeTiles.classList.remove('active');
             setTimeout(resizeVectorCanvas, 0);
+            updateZoomLabel();
         } else {
             vectorContainer.style.display = 'none';
             tileContainer.style.display = 'block';
             modeVector.classList.remove('active');
             modeTiles.classList.add('active');
+            updateZoomLabel();
             if (!tileMap) {
                 initTileMap();
             } else {
@@ -825,6 +848,52 @@
     // Map scale: how many pixels per nautical mile
     let mapRange = 20; // nm visible from center to edge
     let mapPxPerNm = 0; // calculated dynamically
+
+    // Zoom ranges for vector map (nm from center to edge)
+    const VECTOR_ZOOM_STEPS = [5, 10, 15, 20, 30, 50, 100, 200];
+    let vectorZoomIndex = 3; // start at 20nm (matches mapRange default)
+
+    // Tile map zoom — tracks the user's current zoom level
+    let tileZoom = 12; // start at FLYING_ZOOM
+    const TILE_ZOOM_RANGE_LABELS = {
+        5: '250nm', 6: '150nm', 7: '100nm', 8: '50nm', 9: '30nm',
+        10: '20nm', 11: '15nm', 12: '10nm', 13: '5nm', 14: '3nm', 15: '1.5nm'
+    };
+	
+	function updateZoomLabel() {
+        var label = document.getElementById('zoom-range-label');
+        if (!label) return;
+        var mode = document.getElementById('vector-map-container').style.display !== 'none' ? 'vector' : 'tiles';
+        if (mode === 'vector') {
+            label.textContent = mapRange + 'nm';
+        } else {
+            var z = Math.round(tileZoom);
+            label.textContent = TILE_ZOOM_RANGE_LABELS[z] || ('z' + z);
+        }
+    }
+
+    function mapZoom(direction) {
+        var vectorVisible = document.getElementById('vector-map-container').style.display !== 'none';
+
+        if (vectorVisible) {
+            // Vector map: step through predefined range values
+            var newIndex = vectorZoomIndex + direction;
+            if (newIndex < 0) newIndex = 0;
+            if (newIndex >= VECTOR_ZOOM_STEPS.length) newIndex = VECTOR_ZOOM_STEPS.length - 1;
+            if (newIndex === vectorZoomIndex) return; // already at limit
+            vectorZoomIndex = newIndex;
+            mapRange = VECTOR_ZOOM_STEPS[vectorZoomIndex];
+        } else {
+            // Tile map: adjust zoom by 1 level
+            if (tileMap && tileMapReady) {
+                var currentZoom = tileMap.getZoom();
+                var newZoom = Math.max(5, Math.min(15, Math.round(currentZoom) + direction));
+                tileZoom = newZoom;
+                tileMap.zoomTo(newZoom, { duration: 300 });
+            }
+        }
+        updateZoomLabel();
+    }
     
     function drawMap() {
         var heading = d.heading_mag || 0;
@@ -1197,6 +1266,7 @@
     connectWebSocket();
     resizeVectorCanvas();
     renderMap();
+    updateZoomLabel();
     </script>
 </body>
 </html>
