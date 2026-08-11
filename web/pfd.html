@@ -60,6 +60,7 @@
         }
         .info-box .label { font-size: 8px; color: #888; margin-bottom: 2px; }
         .info-box .value { font-size: 14px; font-weight: bold; }
+		.info-box .dme-box { font-size: 9px; color: #00FF66; margin-top: 2px; }
         .knob-btn {
             background: #1a1a1a; border: 1px solid #333; color: #00FFFF;
             font-size: 10px; padding: 1px 4px; border-radius: 2px;
@@ -115,6 +116,7 @@
             <div class="info-box">
                 <div class="label">NAV1</div>
                 <div class="value" id="info-nav1">---.--</div>
+				<div class="dme-box" id="dme-nav1" style="display:none;">DME <span id="info-dme1">--.-</span> nm</div>
                 <div class="knob-row">
                     <button class="knob-btn" onclick="sendKnob('NAV1_BIG_LEFT')">−−</button>
                     <button class="knob-btn" onclick="sendKnob('NAV1_SMALL_LEFT')">−</button>
@@ -126,6 +128,7 @@
             <div class="info-box">
                 <div class="label">NAV2</div>
                 <div class="value" id="info-nav2">---.--</div>
+				<div class="dme-box" id="dme-nav2" style="display:none;">DME <span id="info-dme2">--.-</span> nm</div>
                 <div class="knob-row">
                     <button class="knob-btn" onclick="sendKnob('NAV2_BIG_LEFT')">−−</button>
                     <button class="knob-btn" onclick="sendKnob('NAV2_SMALL_LEFT')">−</button>
@@ -174,7 +177,7 @@
             <div class="softkey active">PFD</div>
             <div class="softkey">INSET</div>
             <div class="softkey" id="softkey-cdi" onclick="toggleCDI()">CDI</div>
-            <div class="softkey">DME</div>
+            <div class="softkey" id="softkey-dme" onclick="toggleDME()">DME</div>
             <div class="softkey" id="softkey-nrst" onclick="toggleAirports()">NRST</div>
             <div class="softkey">BACK</div>
             <div class="softkey">ENT</div>
@@ -236,6 +239,29 @@
         }
         // Update visual state on next data tick (when MSFS replies)
     }
+	
+	let showDME = false;
+    function toggleDME() {
+        showDME = !showDME;
+        var btn = document.getElementById('softkey-dme');
+        if (btn) btn.classList.toggle('active', showDME);
+        var dme1 = document.getElementById('dme-nav1');
+        var dme2 = document.getElementById('dme-nav2');
+        if (dme1) dme1.style.display = showDME ? 'block' : 'none';
+        if (dme2) dme2.style.display = showDME ? 'block' : 'none';
+        if (!showDME) {
+            // When turning off, just hide the boxes
+        } else {
+            // When turning on, update immediately
+            updateDME();
+        }
+    }
+    function updateDME() {
+        var dme1El = document.getElementById('info-dme1');
+        var dme2El = document.getElementById('info-dme2');
+        if (dme1El) dme1El.textContent = (d.nav1_dme && d.nav1_dme > 0) ? d.nav1_dme.toFixed(1) : '--.-';
+        if (dme2El) dme2El.textContent = (d.nav2_dme && d.nav2_dme > 0) ? d.nav2_dme.toFixed(1) : '--.-';
+    }
 
     function toggleAirports() {
         showAirports = !showAirports;
@@ -267,6 +293,7 @@
                     statusText.style.color = payload.connected ? '#00FF00' : '#FF8800';
                 }
                 updateSideInfo();
+                updateDME();
 				// Update CDI softkey color based on GPS/VOR source
                 var cdiBtn = document.getElementById('softkey-cdi');
                 if (cdiBtn) {
