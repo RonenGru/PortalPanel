@@ -617,6 +617,10 @@ def handle_knob_command(data):
         elif cmd == "NAV2_SWAP":
             event = ae.find("NAV2_RADIO_SWAP")
             event()
+        # --- CDI Source Toggle (GPS / VOR1) ---
+        elif cmd == "CDI_TOGGLE":
+            event = ae.find("TOGGLE_GPS_DRIVES_NAV1")
+            event()    
         # --- BARO Setting ---
         elif cmd == "BARO_RIGHT":
             event = ae.find("KOHLSMAN_INC")

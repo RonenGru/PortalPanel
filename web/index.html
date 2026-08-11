@@ -121,6 +121,8 @@
         .softkey:hover { background: #2a2a2a; color: #aaa; border-color: #555; }
         .softkey:active { background: #333; color: #fff; }
         .softkey.active { background: #003344; color: #00FFFF; border-color: #006677; }
+		.softkey.cdi-gps { background: #003300; color: #00FF66; border-color: #006600; }
+        .softkey.cdi-vor { background: #330033; color: #FF00FF; border-color: #660066; }
 		.softkey.nrst-active { background: #002244; color: #00AAFF; border-color: #0066AA; }
         #vsi-box {
             margin-top: 8px;
@@ -237,7 +239,7 @@
         <div id="center-column">
             <div class="softkey active">PFD</div>
             <div class="softkey">INSET</div>
-            <div class="softkey">CDI</div>
+            <div class="softkey" id="softkey-cdi" onclick="toggleCDI()">CDI</div>
             <div class="softkey">DME</div>
             <div class="softkey" id="softkey-nrst" onclick="toggleAirports()">NRST</div>
             <div class="softkey">BACK</div>
@@ -336,6 +338,13 @@
             console.log('[KNOB] Sent: ' + cmd);
         }
     }
+	
+	function toggleCDI() {
+        if (socket && socket.connected) {
+            socket.emit('knob_command', { cmd: 'CDI_TOGGLE' });
+        }
+        // Update visual state on next data tick (when MSFS replies)
+    }
 
     function toggleAirports() {
         showAirports = !showAirports;
@@ -364,6 +373,17 @@
                     statusText.style.color = payload.connected ? '#00FF00' : '#FF8800';
                 }
                 updateSideInfo();
+				// Update CDI softkey color based on GPS/VOR source
+                var cdiBtn = document.getElementById('softkey-cdi');
+                if (cdiBtn) {
+                    if (d.gps_cdi) {
+                        cdiBtn.textContent = 'GPS';
+                        cdiBtn.className = 'softkey cdi-gps';
+                    } else {
+                        cdiBtn.textContent = 'VOR';
+                        cdiBtn.className = 'softkey cdi-vor';
+                    }
+                }
                 updateMFD();
             });
             socket.on('disconnect', function() {
