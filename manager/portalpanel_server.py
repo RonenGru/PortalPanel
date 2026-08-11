@@ -73,6 +73,7 @@ INSTRUMENT_VARS = {
     "gps_magvar":            "GPS_MAGVAR",
     # Autopilot / Heading Bug
     "hdg_bug":              "AUTOPILOT_HEADING_LOCK_DIR",
+    "nav1_crs":             "NAV_OBS:1",
     "ap_master":            "AUTOPILOT_MASTER",
     "ap_alt_lock":          "AUTOPILOT_ALTITUDE_LOCK",
     "ap_hdg_lock":          "AUTOPILOT_HEADING_LOCK",
@@ -148,6 +149,7 @@ def convert_units(raw_data):
         converted["heading_true"] = round(converted["heading_true"] * 57.2958, 2)
     if converted.get("heading_mag") is not None:
         converted["heading_mag"] = round(converted["heading_mag"] * 57.2958, 2)
+    # NAV1 Course (CRS/OBS): MSFS 2024 returns degrees directly, no conversion needed    
     # Heading bug: SimConnect library already returns this in degrees — no conversion needed
         # Flight Director: MSFS 2024 returns radians, convert to degrees
     if converted.get("ap_fdir_bank") is not None:
@@ -629,6 +631,15 @@ def handle_knob_command(data):
         elif cmd == "HDG_LEFT":
             event = ae.find("HEADING_BUG_DEC")
             event()
+        # --- NAV1 Course (CRS/OBS) ---
+        elif cmd == "CRS_RIGHT":
+            event = ae.find("VOR1_OBI_INC")
+            event()
+        elif cmd == "CRS_LEFT":
+            event = ae.find("VOR1_OBI_DEC")
+            event()
+        
+        # Optional: also add NAV2 course later if needed    
     except Exception as e:
         print("[KNOB] Error writing to SimConnect: {}".format(e))
 

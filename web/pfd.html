@@ -140,6 +140,14 @@
                     <button class="knob-btn" onclick="sendKnob('BARO_RIGHT')">+</button>
                 </div>
             </div>
+			<div class="info-box">
+                <div class="label">CRS</div>
+                <div class="value" id="info-crs">---</div>
+                <div class="knob-row">
+                    <button class="knob-btn" onclick="sendKnob('CRS_LEFT')">−</button>
+                    <button class="knob-btn" onclick="sendKnob('CRS_RIGHT')">+</button>
+                </div>
+            </div>
             <div class="info-box">
                 <div class="label">OAT</div>
                 <div class="value" id="info-oat">--°F</div>
@@ -260,6 +268,7 @@
         document.getElementById('info-nav1').textContent = d.nav1_freq ? d.nav1_freq.toFixed(2) : '---.--';
         document.getElementById('info-nav2').textContent = d.nav2_freq ? d.nav2_freq.toFixed(2) : '---.--';
         document.getElementById('info-baro').textContent = d.baro_pressure ? d.baro_pressure.toFixed(1) : '----';
+		document.getElementById('info-crs').textContent = d.nav1_crs !== null && d.nav1_crs !== undefined ? Math.round(d.nav1_crs) + '°' : '---';
         var oatEl = document.getElementById('info-oat');
         if (oatEl) {
             if (d.oat !== null && d.oat !== undefined) {
