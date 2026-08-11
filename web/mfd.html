@@ -773,7 +773,7 @@
                     var file = e.target.files[0];
                     if (!file) return;
                     var reader = new FileReader();
-                                        reader.onload = function(ev) {
+                    reader.onload = function(ev) {
                         flightPlanWaypoints = parseFlightPlan(ev.target.result);
                         if (flightPlanWaypoints.length > 0) {
                             showFlightPlan = true;
