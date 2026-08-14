@@ -196,6 +196,58 @@
         #map-container {
             padding: 10px;
             width: 600px;
+            position: relative;
+        }
+        body.sidebar-hidden:not(.wide-layout) #bezel {
+            width: calc(100vw - 48px);
+            height: calc(100vh - 48px);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 34px 4px 4px 4px;
+        }
+        body.sidebar-hidden:not(.wide-layout) #view-tabs {
+            display: none;
+        }
+        body.sidebar-hidden:not(.wide-layout) #engine-view {
+            display: none !important;
+        }
+        body.sidebar-hidden:not(.wide-layout) #map-view {
+            display: flex !important;
+            flex: 1;
+            flex-direction: column;
+            min-height: 0;
+        }
+        body.sidebar-hidden:not(.wide-layout) #map-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            width: 100%;
+            min-height: 0;
+        }
+        body.sidebar-hidden:not(.wide-layout) #map-mode-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 4px;
+            flex: 0 0 auto;
+        }
+        body.sidebar-hidden:not(.wide-layout) #map-content-row {
+            flex: 1;
+            display: flex;
+            flex-direction: row;
+            min-height: 0;
+        }
+        body.sidebar-hidden:not(.wide-layout) #vector-map-container,
+        body.sidebar-hidden:not(.wide-layout) #tile-map-container {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            min-width: 0;
+        }
+        body.sidebar-hidden:not(.wide-layout) #map-info {
+            display: none !important;
+        }
         }
         #map-content-row {
             /* Default (compact) layout: children stack normally, block-level.
@@ -360,6 +412,42 @@
             padding: 12px 8px;
             font-size: 12px;
         }
+
+        /* Fullscreen map toggle button */
+        #map-fullscreen-toggle {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            background: rgba(10, 10, 10, 0.85);
+            border: 1px solid #006677;
+            border-radius: 4px;
+            color: #00FFFF;
+            font-size: 18px;
+            line-height: 30px;
+            text-align: center;
+            cursor: pointer;
+            z-index: 50;
+            transition: all 0.3s;
+        }
+        #map-fullscreen-toggle:hover {
+            background: #003344;
+            box-shadow: 0 0 8px rgba(0, 255, 255, 0.3);
+        }
+
+        /* When sidebar is hidden, map fills 100% width */
+        body.sidebar-hidden #map-info {
+            display: none !important;
+        }
+        body.sidebar-hidden.wide-layout #map-content-row {
+            flex-direction: column;
+        }
+        body.sidebar-hidden.wide-layout #vector-map-container,
+        body.sidebar-hidden.wide-layout #tile-map-container {
+            flex: 1;
+            width: 100% !important;
+        }
     </style>
 </head>
 <body>
@@ -466,6 +554,8 @@
                         </div>
                     </div>
                 </div>
+                <!-- Fullscreen map toggle -->
+                <div id="map-fullscreen-toggle" onclick="toggleSidebar()" title="Hide/Show sidebar">&#9776;</div>
             </div>
         </div>
     </div>
@@ -544,6 +634,19 @@
             }
         }
     }
+	
+    let sidebarHidden = false;
+    function toggleSidebar() {
+        sidebarHidden = !sidebarHidden;
+        document.body.classList.toggle('sidebar-hidden', sidebarHidden);
+        var btn = document.getElementById('map-fullscreen-toggle');
+        if (btn) btn.innerHTML = sidebarHidden ? '&#9776;' : '&#9776;';
+        // Resize maps after the CSS transition settles
+        setTimeout(function() {
+            resizeVectorCanvas();
+            if (tileMap) tileMap.resize();
+        }, 50);
+    }	
 
     // =====================================================
     // LAYOUT TOGGLE (Compact stacked view <-> Wide dashboard view)
@@ -577,6 +680,11 @@
             resizeVectorCanvas();
             if (tileMap) tileMap.resize();
         }, 0);
+        // If sidebar is hidden when toggling wide mode, show a toast
+        // telling the user where the button is.
+        if (sidebarHidden) {
+            console.log('[LAYOUT] Sidebar is hidden in wide mode. Toggle button remains in corner.');
+        }
     }
 
     // =====================================================
