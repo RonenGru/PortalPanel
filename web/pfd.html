@@ -97,6 +97,9 @@
 		.softkey.nrst-active { background: #002244; color: #00AAFF; border-color: #0066AA; }
         #vsi-box { margin-top: 8px; display: flex; justify-content: center; }
         #vsi-canvas { display: block; }
+		/* ----- NAV1 frequency display ----- */
+		.freq-active   { font-size: 24px; font-weight: bold; }   /* matches the size of the original big number */
+		.freq-standby  { font-size: 16px; margin-top: 2px; }      /* smaller, sits just under the active number */
     </style>
 </head>
 <body>
@@ -114,17 +117,20 @@
     <div id="bezel">
         <div id="left-info">
             <div class="info-box">
-                <div class="label">NAV1</div>
-                <div class="value" id="info-nav1">---.--</div>
+				<div class="label">NAV1</div>
+				<!-- Active frequency (big) -->
+				<div class="value freq-active" id="info-nav1-active">---.--</div>
+				<!-- Standby frequency (small) -->
+				<div class="value freq-standby" id="info-nav1-standby">---.--</div>
 				<div class="dme-box" id="dme-nav1" style="display:none;">DME <span id="info-dme1">--.-</span> nm</div>
-                <div class="knob-row">
-                    <button class="knob-btn" onclick="sendKnob('NAV1_BIG_LEFT')">−−</button>
-                    <button class="knob-btn" onclick="sendKnob('NAV1_SMALL_LEFT')">−</button>
-                    <button class="knob-btn" onclick="sendKnob('NAV1_SWAP')">⇄</button>
-                    <button class="knob-btn" onclick="sendKnob('NAV1_SMALL_RIGHT')">+</button>
-                    <button class="knob-btn" onclick="sendKnob('NAV1_BIG_RIGHT')">++</button>
-                </div>
-            </div>
+				<div class="knob-row">
+					<button class="knob-btn" onclick="sendKnob('NAV1_BIG_LEFT')">−−</button>
+					<button class="knob-btn" onclick="sendKnob('NAV1_SMALL_LEFT')">−</button>
+					<button class="knob-btn" onclick="sendKnob('NAV1_SWAP')">⇄</button>
+					<button class="knob-btn" onclick="sendKnob('NAV1_SMALL_RIGHT')">+</button>
+					<button class="knob-btn" onclick="sendKnob('NAV1_BIG_RIGHT')">++</button>
+				</div>
+			</div>
             <div class="info-box">
                 <div class="label">NAV2</div>
                 <div class="value" id="info-nav2">---.--</div>
@@ -200,15 +206,35 @@
     const CX = W / 2;
     const CY = H / 2;
     let d = {};
-    let smooth = {
-        pitch: 0, roll: 0, airspeed: 0,
-        altitude: 0, heading_mag: 0, vertical_speed: 0,
-        baro_pressure: 1013, turn_rate: 0, slip_ball: 0,
-        nav1_freq: 0, nav2_freq: 0
+	// ----- SMOOTHING SETTINGS -----
+	// Default smoothing for most parameters (heading, altitude, airspeed, …)
+	const SMOOTH_FACTOR = 0.35;
+
+	// Per‑key overrides – set to 0.0 to disable smoothing for a value.
+	// We disable smoothing for the NAV frequencies so they jump instantly.
+	const SMOOTH_OVERRIDES = {
+		nav1_freq: 0.0,
+		nav2_freq: 0.0
+	};
+
+	/**
+	 * Returns the smoothing factor to use for a given key.
+	 * If the key has an override, that value is used; otherwise the global factor.
+	 */
+	function getSmoothFactor(key) {
+		return SMOOTH_OVERRIDES[key] !== undefined ? SMOOTH_OVERRIDES[key] : SMOOTH_FACTOR;
+	}
+
+	// The smoothing container – we keep the same keys as before, but each will be
+	// smoothed with its own factor (via getSmoothFactor).
+	let smooth = {
+			pitch: 0, roll: 0, airspeed: 0,
+			altitude: 0, heading_mag: 0, vertical_speed: 0,
+			baro_pressure: 1013, turn_rate: 0, slip_ball: 0,
+			nav1_freq: 0, nav2_freq: 0
     };
     let smoothHdgBug = 0;
     let lastHdgBug = null;
-    const SMOOTH_FACTOR = 0.35;
     let frameCount = 0;
     let lastFpsTime = performance.now();
     let prevAirspeed = null;
@@ -320,7 +346,12 @@
         }
     }
     function updateSideInfo() {
-        document.getElementById('info-nav1').textContent = d.nav1_freq ? d.nav1_freq.toFixed(2) : '---.--';
+// ACTIVE frequency (big number)
+		document.getElementById('info-nav1-active').textContent =
+			d.nav1_freq ? d.nav1_freq.toFixed(2) : '---.--';
+// STANDBY frequency (small number)
+		document.getElementById('info-nav1-standby').textContent =
+			d.nav1_stby_freq ? d.nav1_stby_freq.toFixed(2) : '---.--';
         document.getElementById('info-nav2').textContent = d.nav2_freq ? d.nav2_freq.toFixed(2) : '---.--';
         document.getElementById('info-baro').textContent = d.baro_pressure ? d.baro_pressure.toFixed(1) : '----';
 		document.getElementById('info-crs').textContent = d.nav1_crs !== null && d.nav1_crs !== undefined ? Math.round(d.nav1_crs) + '°' : '---';
@@ -830,10 +861,12 @@
         render.lastTime = now;
         var lerpFactor = 1.0 - Math.pow(1.0 - SMOOTH_FACTOR, dt);
         for (var key in smooth) {
-            if (d[key] !== undefined && d[key] !== null) {
-                smooth[key] += (d[key] - smooth[key]) * lerpFactor;
-            }
-        }
+			if (d[key] !== undefined && d[key] !== null) {
+				var factor = getSmoothFactor(key);                     // <-- per‑key factor
+				var lerp   = 1.0 - Math.pow(1.0 - factor, dt);         // dt is already defined above
+				smooth[key] += (d[key] - smooth[key]) * lerp;
+			}
+		}
         if (d.hdg_bug !== undefined && d.hdg_bug !== null) {
             var bugDeg = d.hdg_bug;
             if (d.gps_magvar !== undefined && d.gps_magvar !== null) {

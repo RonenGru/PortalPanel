@@ -575,77 +575,97 @@ def api_monitors():
         return jsonify({"monitors": [], "error": str(e)})
 
 
-@socketio.on("knob_command")
-def handle_knob_command(data):
-    """Receives knob commands from web UI or hardware and writes to MSFS"""
+def process_knob_command(cmd):
+    """Shared command processor — called by both WebSocket and HTTP endpoints.
+    Returns (success: bool, error_msg: str or None).
+    """
     if not g_simconnect_active or g_simconnect_requests is None:
-        return
-    cmd = data.get("cmd")
-    print("[KNOB] Received: {}".format(cmd))
+        return False, "SimConnect not active"
+
     try:
         ar = g_simconnect_requests
         ae = g_simconnect_events
-        # --- NAV1 Frequency ---
+
+                      # --- NAV1 Frequency ---
+        # MSFS 2024 known quirk: increments step by 1 MHz instead of 0.05
+        # Using events instead of ar.set() — frequency will change, just not by the expected increment
         if cmd == "NAV1_BIG_RIGHT":
-            event = ae.find("NAV1_RADIO_WHOLE_INC")
-            event()
+            event = ae.find("NAV1_RADIO_WHOLE_INC"); event()
         elif cmd == "NAV1_BIG_LEFT":
-            event = ae.find("NAV1_RADIO_WHOLE_DEC")
-            event()
+            event = ae.find("NAV1_RADIO_WHOLE_DEC"); event()
         elif cmd == "NAV1_SMALL_RIGHT":
-            event = ae.find("NAV1_RADIO_FRACT_INC")
-            event()
+            event = ae.find("NAV1_RADIO_FRACT_INC"); event()
         elif cmd == "NAV1_SMALL_LEFT":
-            event = ae.find("NAV1_RADIO_FRACT_DEC")
-            event()
+            event = ae.find("NAV1_RADIO_FRACT_DEC"); event()
         elif cmd == "NAV1_SWAP":
-            event = ae.find("NAV1_RADIO_SWAP")
-            event()
+            event = ae.find("NAV1_RADIO_SWAP"); event()
         # --- NAV2 Frequency ---
         elif cmd == "NAV2_BIG_RIGHT":
-            event = ae.find("NAV2_RADIO_WHOLE_INC")
-            event()
+            event = ae.find("NAV2_RADIO_WHOLE_INC"); event()
         elif cmd == "NAV2_BIG_LEFT":
-            event = ae.find("NAV2_RADIO_WHOLE_DEC")
-            event()
+            event = ae.find("NAV2_RADIO_WHOLE_DEC"); event()
         elif cmd == "NAV2_SMALL_RIGHT":
-            event = ae.find("NAV2_RADIO_FRACT_INC")
-            event()
+            event = ae.find("NAV2_RADIO_FRACT_INC"); event()
         elif cmd == "NAV2_SMALL_LEFT":
-            event = ae.find("NAV2_RADIO_FRACT_DEC")
-            event()
+            event = ae.find("NAV2_RADIO_FRACT_DEC"); event()
         elif cmd == "NAV2_SWAP":
-            event = ae.find("NAV2_RADIO_SWAP")
-            event()
+            event = ae.find("NAV2_RADIO_SWAP"); event()
         # --- CDI Source Toggle (GPS / VOR1) ---
         elif cmd == "CDI_TOGGLE":
-            event = ae.find("TOGGLE_GPS_DRIVES_NAV1")
-            event()    
+            event = ae.find("TOGGLE_GPS_DRIVES_NAV1"); event()
         # --- BARO Setting ---
         elif cmd == "BARO_RIGHT":
-            event = ae.find("KOHLSMAN_INC")
-            event()
+            event = ae.find("KOHLSMAN_INC"); event()
         elif cmd == "BARO_LEFT":
-            event = ae.find("KOHLSMAN_DEC")
-            event()
+            event = ae.find("KOHLSMAN_DEC"); event()
         # --- Heading Bug ---
         elif cmd == "HDG_RIGHT":
-            event = ae.find("HEADING_BUG_INC")
-            event()
+            event = ae.find("HEADING_BUG_INC"); event()
         elif cmd == "HDG_LEFT":
-            event = ae.find("HEADING_BUG_DEC")
-            event()
+            event = ae.find("HEADING_BUG_DEC"); event()
         # --- NAV1 Course (CRS/OBS) ---
         elif cmd == "CRS_RIGHT":
-            event = ae.find("VOR1_OBI_INC")
-            event()
+            event = ae.find("VOR1_OBI_INC"); event()
         elif cmd == "CRS_LEFT":
-            event = ae.find("VOR1_OBI_DEC")
-            event()
-        
-        # Optional: also add NAV2 course later if needed    
+            event = ae.find("VOR1_OBI_DEC"); event()
+        else:
+            return False, "Unknown command: {}".format(cmd)
+
+        print("[KNOB] Command executed: {}".format(cmd))
+        return True, None
+
     except Exception as e:
-        print("[KNOB] Error writing to SimConnect: {}".format(e))
+        print("[KNOB] Error: {}".format(e))
+        return False, str(e)
+
+
+@socketio.on("knob_command")
+def handle_knob_command(data):
+    """Receives knob commands from web UI or hardware and writes to MSFS (WebSocket)"""
+    cmd = data.get("cmd")
+    if not cmd:
+        return
+    print("[KNOB] WebSocket received: {}".format(cmd))
+    process_knob_command(cmd)
+
+
+@app.route("/api/knob", methods=["POST"])
+def api_knob():
+    """HTTP endpoint for ESP32 hardware controllers to send knob commands.
+    Accepts JSON: {"cmd": "NAV1_SMALL_RIGHT"}
+    Returns JSON: {"ok": true} or {"ok": false, "error": "..."}
+    """
+    data = request.get_json(silent=True)
+    if not data or "cmd" not in data:
+        return jsonify({"ok": False, "error": "Missing 'cmd' field"}), 400
+
+    cmd = data["cmd"]
+    print("[KNOB] HTTP received: {}".format(cmd))
+    success, error = process_knob_command(cmd)
+    if success:
+        return jsonify({"ok": True, "cmd": cmd})
+    else:
+        return jsonify({"ok": False, "error": error}), 500
 
 @socketio.on("nrst_toggle")
 def handle_nrst_toggle(data):
@@ -692,5 +712,5 @@ if __name__ == "__main__":
     # Start Flask + WebSocket server
     print("[FLASK] PortalPanel server starting on http://127.0.0.1:8090")
     print("[WEBSOCKET] WebSocket enabled for real-time push")
-    socketio.run(app, host="127.0.0.1", port=8090,
+    socketio.run(app, host="0.0.0.0", port=8090,
                  debug=False, allow_unsafe_werkzeug=True)
