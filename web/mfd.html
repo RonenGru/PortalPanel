@@ -1587,7 +1587,7 @@
         try {
             socket = io('http://127.0.0.1:8090');
             socket.on('connect', function() { console.log('[WS] Connected'); });
-            socket.on('nrst_state', function(payload) {
+socket.on('nrst_state', function(payload) {
     var newShow = !!payload.show;
     if (newShow === showAirports) return;
     showAirports = newShow;
@@ -1598,7 +1598,9 @@
         fetchNearbyAirports();
     } else {
         nearbyAirports = [];
+        airportsDirty = true;   // force the update to run
         updateTileMapAirports();
+        clearAirportMarkers();  // also clear the markers directly
     }
 });
             socket.on('instrument_data', function(payload) {

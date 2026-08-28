@@ -407,6 +407,11 @@
 				var btn = document.getElementById('softkey-nrst');
 				if (btn) btn.classList.toggle('nrst-active', showAirports);
 			});
+			socket.on('dme_state', function(payload) {
+				var newShow = !!payload.show;
+				if (newShow === showDME) return;
+				toggleDME();
+			});
             socket.on('instrument_data', function(payload) {
                 d = payload.data || {};
                 if (payload.status) {

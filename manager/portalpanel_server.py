@@ -42,6 +42,8 @@ g_simconnect_active = False
 g_simconnect_requests = None  # Stores the AircraftRequests object for writing
 g_simconnect_events = None    # Stores the AircraftEvents object for events
 g_status_message = "Initializing..."
+g_dme_on = False
+g_nrst_on = False
 
 # Final corrected variable list (from our testing)
 INSTRUMENT_VARS = {
@@ -579,6 +581,7 @@ def process_knob_command(cmd):
     """Shared command processor — called by both WebSocket and HTTP endpoints.
     Returns (success: bool, error_msg: str or None).
     """
+    global g_dme_on, g_nrst_on
     if not g_simconnect_active or g_simconnect_requests is None:
         return False, "SimConnect not active"
 
@@ -613,6 +616,14 @@ def process_knob_command(cmd):
         # --- CDI Source Toggle (GPS / VOR1) ---
         elif cmd == "CDI_TOGGLE":
             event = ae.find("TOGGLE_GPS_DRIVES_NAV1"); event()
+        # --- DME Display Toggle (relayed to browsers) ---
+        elif cmd == "DME_TOGGLE":
+            g_dme_on = not g_dme_on
+            socketio.emit("dme_state", {"show": g_dme_on})
+        # --- NRST Airport Overlay Toggle (relayed to browsers) ---
+        elif cmd == "NRST_TOGGLE":
+            g_nrst_on = not g_nrst_on
+            socketio.emit("nrst_state", {"show": g_nrst_on})
         # --- BARO Setting ---
         elif cmd == "BARO_RIGHT":
             event = ae.find("KOHLSMAN_INC"); event()
