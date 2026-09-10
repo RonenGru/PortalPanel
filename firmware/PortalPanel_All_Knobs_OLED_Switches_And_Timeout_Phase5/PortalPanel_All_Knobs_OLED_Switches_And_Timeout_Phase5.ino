@@ -5,10 +5,12 @@
 #include <Adafruit_SSD1306.h>
 
 // --- WiFi & Server ---
-const char* WIFI_SSID     = "Reelstories";
-const char* WIFI_PASSWORD = "Me@gh@n1";
-const char* SERVER_URL     = "http://192.168.0.162:8090/api/knob";
-const char* DATA_URL       = "http://192.168.0.162:8090/api/data";
+// EDIT BEFORE UPLOAD: replace the placeholders below with your own values.
+//   NEVER commit your real WiFi password or IP address to a public repository.
+const char* WIFI_SSID     = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* SERVER_URL     = "http://YOUR_PC_IP_ADDRESS:8090/api/knob";
+const char* DATA_URL       = "http://YOUR_PC_IP_ADDRESS:8090/api/data";
 
 // --- OLED Config ---
 #define SCREEN_WIDTH 128
@@ -68,6 +70,11 @@ const unsigned long DATA_POLL_MS = 200;
 String nav1_stby = "---.--";
 String nav2_stby = "---.--";
 
+// --- AUTO-SLEEP CONFIGURATION (15 Minutes) ---
+const unsigned long SLEEP_TIMEOUT_MS = 15UL * 60UL * 1000UL; // 15 minutes
+unsigned long last_activity_time = 0;
+bool is_sleeping = false;
+
 // Button debounce state
 bool btn_cdi_last = HIGH;
 bool btn_dme_last = HIGH;
@@ -75,6 +82,31 @@ bool btn_nrst_last = HIGH;
 unsigned long btn_cdi_time = 0;
 unsigned long btn_dme_time = 0;
 unsigned long btn_nrst_time = 0;
+
+void wakeDisplay();
+
+// Call this on ANY knob turn or button press
+void recordActivity() {
+  last_activity_time = millis();
+  if (is_sleeping) {
+    wakeDisplay();
+  }
+}
+
+void sleepDisplay() {
+  is_sleeping = true;
+  display.clearDisplay();
+  display.display();
+  display.ssd1306_command(SSD1306_DISPLAYOFF); // Powers off OLED panel
+  Serial.println("[OLED] Screen went to sleep (Power Save)");
+}
+
+void wakeDisplay() {
+  is_sleeping = false;
+  display.ssd1306_command(SSD1306_DISPLAYON);  // Powers on OLED panel
+  last_data_poll = 0;                          // Force immediate data poll
+  Serial.println("[OLED] Screen woke up!");
+}
 
 int getRepetitions(EncoderState &state) {
   unsigned long now = millis();
@@ -93,6 +125,15 @@ void setup() {
   if(!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
     Serial.println("[OLED] SSD1306 allocation failed");
   }
+
+  // =========================================================================
+  // --- OVERCLOCK OLED REFRESH RATE (Fixes VR Passthrough Scan Lines) ---
+  // Sets oscillator frequency to maximum (0xF) & clock divide ratio to 1 (0x0)
+  // This pushes the internal refresh rate past 300+ Hz, eliminating camera flicker.
+  // =========================================================================
+  display.ssd1306_command(SSD1306_SETDISPLAYCLOCKDIV);
+  display.ssd1306_command(0xF0);
+
   display.clearDisplay();
   display.setTextSize(2);
   display.setTextColor(SSD1306_WHITE);
@@ -140,9 +181,12 @@ void setup() {
   display.println("Connected!");
   display.display();
   delay(1000);
+
+  last_activity_time = millis(); // Initialize activity timer
 }
 
 bool sendKnobCommand(const char* cmd) {
+  recordActivity(); // Any command resets the sleep timer and wakes screen
   if (WiFi.status() != WL_CONNECTED) return false;
   HTTPClient http;
   http.begin(SERVER_URL);
@@ -160,10 +204,11 @@ void readButton(int pin, bool &last, unsigned long &last_time, const char* cmd) 
   if (state == LOW && last == HIGH && (now - last_time) > BTN_DEBOUNCE_MS) {
     last_time = now;
     last = state;
+    recordActivity();
     sendKnobCommand(cmd);
     Serial.printf("[BTN] %s\n", cmd);
   }
-  last = state; // always track pin state for edge detection
+  last = state;
 }
 
 void pollData() {
@@ -198,6 +243,8 @@ void pollData() {
 }
 
 void updateDisplay() {
+  if (is_sleeping) return; // Don't draw if sleeping
+
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
@@ -232,6 +279,7 @@ void readEnc1() {
     unsigned long now = millis();
     if (now - last_turn_time < TURN_DEBOUNCE_MS) { enc1.last_clk = c; return; }
     last_turn_time = now;
+    recordActivity();
     int reps = getRepetitions(enc1);
     bool right = (c != digitalRead(ENC1_DT));
     const char* cmd = enc1.mode ? (right ? "NAV1_BIG_RIGHT" : "NAV1_BIG_LEFT")
@@ -242,8 +290,13 @@ void readEnc1() {
 }
 void readBtn1() {
   int s = digitalRead(ENC1_SW);
-  if (s == LOW && !enc1.sw_was_pressed) enc1.sw_press_time = millis(), enc1.sw_was_pressed = true;
+  if (s == LOW && !enc1.sw_was_pressed) {
+    enc1.sw_press_time = millis();
+    enc1.sw_was_pressed = true;
+    recordActivity();
+  }
   if (s == HIGH && enc1.sw_was_pressed) {
+    recordActivity();
     unsigned long dur = millis() - enc1.sw_press_time;
     if (dur >= LONG_PRESS_MS) { sendKnobCommand("NAV1_SWAP"); last_data_poll = 0; }
     else { oled_mode = !oled_mode; pollData(); updateDisplay(); }
@@ -256,6 +309,7 @@ void readEnc2() {
     unsigned long now = millis();
     if (now - last_turn_time < TURN_DEBOUNCE_MS) { enc2.last_clk = c; return; }
     last_turn_time = now;
+    recordActivity();
     int reps = getRepetitions(enc2);
     bool right = (c != digitalRead(ENC2_DT));
     const char* cmd = enc2.mode ? (right ? "NAV2_BIG_RIGHT" : "NAV2_BIG_LEFT")
@@ -266,8 +320,13 @@ void readEnc2() {
 }
 void readBtn2() {
   int s = digitalRead(ENC2_SW);
-  if (s == LOW && !enc2.sw_was_pressed) enc2.sw_press_time = millis(), enc2.sw_was_pressed = true;
+  if (s == LOW && !enc2.sw_was_pressed) {
+    enc2.sw_press_time = millis();
+    enc2.sw_was_pressed = true;
+    recordActivity();
+  }
   if (s == HIGH && enc2.sw_was_pressed) {
+    recordActivity();
     unsigned long dur = millis() - enc2.sw_press_time;
     if (dur >= LONG_PRESS_MS) { sendKnobCommand("NAV2_SWAP"); last_data_poll = 0; }
     else { enc2.mode = !enc2.mode; }
@@ -280,6 +339,7 @@ void readEnc3() {
     unsigned long now = millis();
     if (now - last_turn_time < TURN_DEBOUNCE_MS) { enc3.last_clk = c; return; }
     last_turn_time = now;
+    recordActivity();
     int reps = getRepetitions(enc3);
     const char* cmd = (c != digitalRead(ENC3_DT)) ? "HDG_RIGHT" : "HDG_LEFT";
     for (int i = 0; i < reps; i++) sendKnobCommand(cmd);
@@ -288,8 +348,8 @@ void readEnc3() {
 }
 void readBtn3() {
   int s = digitalRead(ENC3_SW);
-  if (s == LOW && !enc3.sw_was_pressed) enc3.sw_press_time = millis(), enc3.sw_was_pressed = true;
-  if (s == HIGH && enc3.sw_was_pressed) { enc3.mode = !enc3.mode; enc3.sw_was_pressed = false; }
+  if (s == LOW && !enc3.sw_was_pressed) enc3.sw_press_time = millis(), enc3.sw_was_pressed = true, recordActivity();
+  if (s == HIGH && enc3.sw_was_pressed) { enc3.mode = !enc3.mode; enc3.sw_was_pressed = false; recordActivity(); }
 }
 void readEnc4() {
   int c = digitalRead(ENC4_CLK);
@@ -297,6 +357,7 @@ void readEnc4() {
     unsigned long now = millis();
     if (now - last_turn_time < TURN_DEBOUNCE_MS) { enc4.last_clk = c; return; }
     last_turn_time = now;
+    recordActivity();
     int reps = getRepetitions(enc4);
     const char* cmd = (c != digitalRead(ENC4_DT)) ? "CRS_RIGHT" : "CRS_LEFT";
     for (int i = 0; i < reps; i++) sendKnobCommand(cmd);
@@ -305,8 +366,8 @@ void readEnc4() {
 }
 void readBtn4() {
   int s = digitalRead(ENC4_SW);
-  if (s == LOW && !enc4.sw_was_pressed) enc4.sw_press_time = millis(), enc4.sw_was_pressed = true;
-  if (s == HIGH && enc4.sw_was_pressed) { enc4.mode = !enc4.mode; enc4.sw_was_pressed = false; }
+  if (s == LOW && !enc4.sw_was_pressed) enc4.sw_press_time = millis(), enc4.sw_was_pressed = true, recordActivity();
+  if (s == HIGH && enc4.sw_was_pressed) { enc4.mode = !enc4.mode; enc4.sw_was_pressed = false; recordActivity(); }
 }
 void readEnc5() {
   int c = digitalRead(ENC5_CLK);
@@ -314,6 +375,7 @@ void readEnc5() {
     unsigned long now = millis();
     if (now - last_turn_time < TURN_DEBOUNCE_MS) { enc5.last_clk = c; return; }
     last_turn_time = now;
+    recordActivity();
     int reps = getRepetitions(enc5);
     const char* cmd = (c != digitalRead(ENC5_DT)) ? "BARO_RIGHT" : "BARO_LEFT";
     for (int i = 0; i < reps; i++) sendKnobCommand(cmd);
@@ -322,8 +384,8 @@ void readEnc5() {
 }
 void readBtn5() {
   int s = digitalRead(ENC5_SW);
-  if (s == LOW && !enc5.sw_was_pressed) enc5.sw_press_time = millis(), enc5.sw_was_pressed = true;
-  if (s == HIGH && enc5.sw_was_pressed) { enc5.mode = !enc5.mode; enc5.sw_was_pressed = false; }
+  if (s == LOW && !enc5.sw_was_pressed) enc5.sw_press_time = millis(), enc5.sw_was_pressed = true, recordActivity();
+  if (s == HIGH && enc5.sw_was_pressed) { enc5.mode = !enc5.mode; enc5.sw_was_pressed = false; recordActivity(); }
 }
 
 void loop() {
@@ -345,9 +407,18 @@ void loop() {
   readButton(BTN_NRST, btn_nrst_last, btn_nrst_time, "NRST_TOGGLE");
   
   unsigned long now = millis();
-  if (now - last_data_poll >= DATA_POLL_MS) {
-    last_data_poll = now;
-    pollData();
-    updateDisplay();
+
+  // --- AUTO-SLEEP CHECK ---
+  if (!is_sleeping && (now - last_activity_time >= SLEEP_TIMEOUT_MS)) {
+    sleepDisplay();
+  }
+
+  // --- ONLY POLL DATA AND REFRESH SCREEN IF AWAKE ---
+  if (!is_sleeping) {
+    if (now - last_data_poll >= DATA_POLL_MS) {
+      last_data_poll = now;
+      pollData();
+      updateDisplay();
+    }
   }
 }

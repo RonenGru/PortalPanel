@@ -23,7 +23,22 @@ except ImportError:
 # CONFIG
 # =====================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WEB_DIR = os.path.normpath(os.path.join(BASE_DIR, "..", "web"))
+
+def _asset_root():
+    """Directory containing read-only assets (web/, data/, profiles/)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.normpath(os.path.join(BASE_DIR, ".."))
+
+def _writable_dir():
+    """Writable dir for runtime files (config, generated launcher.html)."""
+    if getattr(sys, "frozen", False):
+        d = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "PortalPanel")
+        os.makedirs(d, exist_ok=True)
+        return d
+    return os.path.normpath(os.path.join(BASE_DIR, ".."))
+
+WEB_DIR = os.path.normpath(os.path.join(_asset_root(), "web"))
 DATA_REFRESH_MS = 50  # How often to read SimConnect (ms)
 
 # =====================================================================
@@ -349,7 +364,7 @@ def index():
 def serve_launcher():
     """Serves the launcher UI page directly from the server to bypass local file security blocks."""
     try:
-        return send_from_directory(BASE_DIR, "launcher.html")
+        return send_from_directory(_writable_dir(), "launcher.html")
     except FileNotFoundError:
         return "ERROR: launcher.html not found in {}".format(BASE_DIR), 404
 
@@ -413,7 +428,7 @@ def api_aircraft():
 import csv as csv_module
 import math as math_module
 
-AIRPORTS_CSV = os.path.normpath(os.path.join(BASE_DIR, "..", "data", "airports.csv"))
+AIRPORTS_CSV = os.path.normpath(os.path.join(_asset_root(), "data", "airports.csv"))
 g_airports = []  # List of airport dicts loaded into memory
 g_airports_loaded = False
 

@@ -207,3 +207,28 @@ __pycache__/
 # OS
 Thumbs.db
 desktop.ini
+# ============================================================
+# Hardware / CAD (keep STLs + 3MF + current FreeCAD source;
+# exclude auto-backups, superseded design versions, big photos)
+# ============================================================
+# FreeCAD internal save-backups (never needed by others)
+*.FCBak
+
+# Superseded FreeCAD housing versions (keep only the newest: Housing3_Moved_NAV_Encoders_Placement.FCStd)
+hardware/PortalPanel_Housing.FCStd
+hardware/PortalPanel_Housing2.FCStd
+
+# Large reference photos inside the housing folder
+hardware/Images/
+
+# ============================================================
+# Keep the build spec (overrides the generic *.spec rule above)
+# ============================================================
+!PortalPanel.spec
+
+# Scratch / dev-only files (do not publish)
+_diag.py
+_smoketest.py
+build_log.txt
+next_session_prompt.txt
+session_notes.md

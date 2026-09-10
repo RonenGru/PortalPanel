@@ -32,9 +32,11 @@
 // ===================================================================
 // CONFIGURATION — Edit these for your network
 // ===================================================================
-const char* WIFI_SSID     = "Reelstories";
-const char* WIFI_PASSWORD = "Me@gh@n1";
-const char* SERVER_URL     = "http://192.168.0.162:8090/api/knob";
+// EDIT BEFORE UPLOAD: replace the placeholders below with your own values.
+//   NEVER commit your real WiFi password or IP address to a public repository.
+const char* WIFI_SSID     = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* SERVER_URL     = "http://YOUR_PC_IP_ADDRESS:8090/api/knob";
 
 // ===================================================================
 // PIN ASSIGNMENTS (Phase 0 — single encoder for NAV1)

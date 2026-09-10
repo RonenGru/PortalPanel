@@ -1,2 +1,8 @@
-Flask>=2.3.0
-SimConnect>=0.4.0
+# PortalPanel - Python dependencies
+# Top-level packages only; pip resolves their transitive dependencies automatically.
+
+Flask>=3.1.0
+flask-socketio>=5.6.0
+SimConnect>=0.4.26
+pywebview>=6.2.0
+screeninfo>=0.8.1

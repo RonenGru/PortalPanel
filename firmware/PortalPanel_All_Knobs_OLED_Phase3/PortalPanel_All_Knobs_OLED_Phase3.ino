@@ -5,10 +5,12 @@
 #include <Adafruit_SSD1306.h>
 
 // --- WiFi & Server ---
-const char* WIFI_SSID     = "Reelstories";
-const char* WIFI_PASSWORD = "Me@gh@n1";
-const char* SERVER_URL     = "http://192.168.0.162:8090/api/knob";
-const char* DATA_URL       = "http://192.168.0.162:8090/api/data";
+// EDIT BEFORE UPLOAD: replace the placeholders below with your own values.
+//   NEVER commit your real WiFi password or IP address to a public repository.
+const char* WIFI_SSID     = "YOUR_WIFI_SSID";
+const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const char* SERVER_URL     = "http://YOUR_PC_IP_ADDRESS:8090/api/knob";
+const char* DATA_URL       = "http://YOUR_PC_IP_ADDRESS:8090/api/data";
 
 // --- OLED Config ---
 #define SCREEN_WIDTH 128

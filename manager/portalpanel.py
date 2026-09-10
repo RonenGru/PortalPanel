@@ -34,8 +34,17 @@ import webview
 # =====================================================
 SERVER_URL = "http://127.0.0.1:8090"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _writable_dir():
+    """Writable dir for runtime files (config, generated launcher.html)."""
+    if getattr(sys, "frozen", False):
+        d = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "PortalPanel")
+        os.makedirs(d, exist_ok=True)
+        return d
+    return os.path.normpath(os.path.join(BASE_DIR, ".."))
+
 SERVER_SCRIPT = os.path.join(BASE_DIR, "portalpanel_server.py")
-CONFIG_FILE = os.path.normpath(os.path.join(BASE_DIR, "..", "portalpanel_config.json"))
+CONFIG_FILE = os.path.join(_writable_dir(), "portalpanel_config.json")
 
 DISPLAY_TYPES = ["combined", "pfd", "mfd"]
 
@@ -83,8 +92,15 @@ def save_config(config):
 # =====================================================
 def start_server():
     print("[LAUNCHER] Starting PortalPanel server...")
+    if getattr(sys, "frozen", False):
+        # Frozen build: run the sibling server executable (no Python interpreter inside).
+        server_exe = os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "PortalPanelServer.exe")
+        cmd = [server_exe]
+    else:
+        # Source mode: run the server script with the current interpreter.
+        cmd = [sys.executable, SERVER_SCRIPT]
     proc = subprocess.Popen(
-        [sys.executable, SERVER_SCRIPT],
+        cmd,
         cwd=BASE_DIR
         # No stdout/stderr redirection -- let the child inherit this
         # console directly, so all of portalpanel_server.py's prints
@@ -561,7 +577,7 @@ def main():
         monitors=get_monitors_html(),
         server_url=SERVER_URL
     )
-    html_path = os.path.join(BASE_DIR, "launcher.html")
+    html_path = os.path.join(_writable_dir(), "launcher.html")
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(html)
 
