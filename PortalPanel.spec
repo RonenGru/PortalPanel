@@ -9,7 +9,7 @@
 # a single COLLECT at the end.
 import os
 
-ROOT = r"E:\Videos\PortalPanel_Backup"
+ROOT = r"E:\Videos\PortalPanel_Final"
 SP   = os.path.join(ROOT, "venv", "Lib", "site-packages")
 
 MANAGER  = os.path.join(ROOT, "manager")
