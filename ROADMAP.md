@@ -19,21 +19,21 @@ This document tracks the development goals and progress for PortalPanel, a live 
 ### Phase 1 — Polish & Core Features
 - [X] G1000 bezel styling (realistic Garmin look)
 - [X] Borderless fullscreen mode
-- [ ] Monitor selection button
-- [ ] Airspeed trend arrow
-- [ ] Altitude trend arrow
-- [ ] Heading bug
-- [ ] CDI (Course Deviation Indicator)
-- [ ] OAT (Outside Air Temp)
-- [ ] Wind display
-- [ ] Autopilot status
+- [x] Monitor selection button
+- [x] Airspeed trend arrow
+- [x] Altitude trend arrow
+- [x] Heading bug
+- [x] CDI (Course Deviation Indicator)
+- [x] OAT (Outside Air Temp)
+- [x] Wind display
+- [x] Autopilot status
 
 ### Phase 2 — PFD Extended
-- [ ] GPS status
+- [x] GPS status
 - [ ] Speed bug / V-Speeds
 - [ ] Alerts/Messages system
 - [ ] Softkeys (menu buttons)
-- [ ] Location/range to waypoint
+- [x] Location/range to waypoint (GPS wp id + distance)
 
 ---
 
@@ -50,11 +50,11 @@ This document tracks the development goals and progress for PortalPanel, a live 
 - [x] Position (lat/long, ground speed)
 
 ### Phase 1.5 — Moving Map
-- [ ] Basic moving map (aircraft position, heading)
-- [ ] Map with terrain features
-- [ ] Waypoints display
-- [ ] Nearest airports
-- [ ] Navigation log (flight plan waypoints)
+- [x] Basic moving map (aircraft position, heading)
+- [x] Map with terrain features (MapLibre tile mode)
+- [x] Waypoints display
+- [x] Nearest airports (NRST)
+- [x] Navigation log (flight plan waypoints, .pln parser)
 
 ### Phase 2 — MFD Extended
 - [ ] Terrain page
@@ -67,14 +67,14 @@ This document tracks the development goals and progress for PortalPanel, a live 
 
 ## Interaction (Phase 3)
 
-- [ ] NAV frequency tuning knobs
-- [ ] Course knob
-- [ ] Heading bug knob
-- [ ] Baro knob
-- [ ] Range knob (map zoom)
+- [x] NAV frequency tuning knobs (NAV1/NAV2, big + small)
+- [x] Course knob
+- [x] Heading bug knob
+- [x] Baro knob
+- [x] Map zoom (software-based; hardware encoder TBD)
 - [ ] Softkeys (mode switches)
 - [ ] Direct-To button
-- [ ] Flight plan button
+- [x] Flight plan button (.pln route overlay)
 
 ---
 
@@ -92,8 +92,8 @@ This document tracks the development goals and progress for PortalPanel, a live 
 ## Aircraft Profile System (Phase 5)
 
 - [ ] Landing/startup page (aircraft selection)
-- [ ] Pre-built profiles (C172 G1000, C172 Steam Gauge, J-3 Cub, etc.)
-- [ ] Auto-detect which aircraft is loaded in MSFS
+- [x] Pre-built profiles (C172 G1000 shipped; more planned)
+- [x] Auto-detect which aircraft is loaded in MSFS
 
 ---
 
@@ -102,3 +102,14 @@ This document tracks the development goals and progress for PortalPanel, a live 
 - [ ] Test and optimize for VR + passthrough setup
 - [ ] Ensure displays float nicely in real-world cockpit view
 - [ ] Optimize performance for VR session
+
+---
+
+## Packaging & Release (Phase 7)
+
+- [x] GPL-3.0 license
+- [x] PyInstaller build (two-exe: launcher + server)
+- [x] GitHub repository (RonenGru/PortalPanel)
+- [x] v1.0 release with downloadable zip
+- [ ] Inno Setup installer (.exe)
+- [ ] CI/CD automated builds (optional, future)
