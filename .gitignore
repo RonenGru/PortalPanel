@@ -232,3 +232,5 @@ _smoketest.py
 build_log.txt
 next_session_prompt.txt
 session_notes.md
+# Release zip (hosted on GitHub Releases, not in repo)
+PortalPanel-v*.zip
