@@ -45,6 +45,7 @@ exe_server = EXE(
     pyz_server, a_server.scripts, [],
     exclude_binaries=True,
     name="PortalPanelServer",
+    icon=os.path.join(ROOT, "logo.ico"),
     console=True,          # keep console for logs during testing
 )
 
@@ -64,6 +65,7 @@ exe_launcher = EXE(
     pyz_launcher, a_launcher.scripts, [],
     exclude_binaries=True,
     name="PortalPanelLauncher",
+    icon=os.path.join(ROOT, "logo.ico"),
     console=True,          # keep console for now; switch to False for release build
 )
 

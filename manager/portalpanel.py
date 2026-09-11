@@ -43,6 +43,29 @@ def _writable_dir():
         return d
     return os.path.normpath(os.path.join(BASE_DIR, ".."))
 
+def _logo_data_uri():
+    """Return the PortalPanel logo as a base64 data-URI ('' if missing).
+
+    Reads web/logo.png next to the exe (frozen) or from the project root
+    (source mode) and inlines it into the launcher HTML so no extra file
+    or HTTP request is needed. Falls back to '' so the layout never breaks.
+    """
+    import base64
+    candidates = []
+    if getattr(sys, "frozen", False):
+        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+        candidates.append(os.path.join(exe_dir, "web", "logo.png"))
+    candidates.append(os.path.normpath(os.path.join(BASE_DIR, "..", "web", "logo.png")))
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                with open(path, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("ascii")
+                return "data:image/png;base64," + b64
+            except Exception:
+                pass
+    return ""
+
 SERVER_SCRIPT = os.path.join(BASE_DIR, "portalpanel_server.py")
 CONFIG_FILE = os.path.join(_writable_dir(), "portalpanel_config.json")
 
@@ -178,6 +201,7 @@ body {{ background: #0a0a0a; color: #ddd; font-family: 'Segoe UI', Arial, sans-s
 #header {{ text-align: center; margin-bottom: 25px; }}
 #header h1 {{ font-size: 28px; letter-spacing: 4px; }}
 .logo-white {{ color: #fff; }} .logo-cyan {{ color: #00FFFF; }}
+#app-logo {{ width: 76px; height: auto; display: block; margin-bottom: 12px; }}
 #header p {{ font-size: 11px; color: #555; margin-top: 5px; }}
 #status {{ margin-bottom: 20px; padding: 10px 20px; background: #111; border: 1px solid #333; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 10px; min-width: 400px; justify-content: center; }}
 #status-dot {{ width: 10px; height: 10px; border-radius: 50%; background: #FF8800; box-shadow: 0 0 8px #FF8800; transition: 0.3s; }}
@@ -204,6 +228,7 @@ body {{ background: #0a0a0a; color: #ddd; font-family: 'Segoe UI', Arial, sans-s
 <body>
 
 <div id="header">
+    <img id="app-logo" src="{logo}" alt="PortalPanel">
     <h1><span class="logo-white">PORTAL</span><span class="logo-cyan">PANEL</span></h1>
     <p>Live Instrument Display for MSFS 2024</p>
 </div>
@@ -575,7 +600,8 @@ def main():
     # Prepare launcher HTML
     html = LAUNCHER_HTML.format(
         monitors=get_monitors_html(),
-        server_url=SERVER_URL
+        server_url=SERVER_URL,
+        logo=_logo_data_uri()
     )
     html_path = os.path.join(_writable_dir(), "launcher.html")
     with open(html_path, "w", encoding="utf-8") as f:
