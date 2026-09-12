@@ -12,13 +12,15 @@ AppPublisher=RonenGru
 DefaultDirName={localappdata}\Programs\PortalPanel
 DefaultGroupName=PortalPanel
 PrivilegesRequired=lowest
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesInstallIn64BitMode=x64compatible
 OutputBaseFilename=PortalPanel-Setup-v1.1
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
 SetupIconFile=logo.ico
+WizardImageFile=wizard_logo.bmp
+
 UninstallDisplayIcon={app}\PortalPanelLauncher.exe
 
 [Files]
