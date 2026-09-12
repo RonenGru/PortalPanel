@@ -234,3 +234,7 @@ next_session_prompt.txt
 session_notes.md
 # Release zip (hosted on GitHub Releases, not in repo)
 PortalPanel-v*.zip
+
+# Inno Setup build output
+Output/
+PortalPanel-Setup-v*.exe
