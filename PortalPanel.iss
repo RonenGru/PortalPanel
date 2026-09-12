@@ -19,7 +19,8 @@ SolidCompression=yes
 WizardStyle=modern
 DisableProgramGroupPage=yes
 SetupIconFile=logo.ico
-WizardImageFile=wizard_logo.bmp
+WizardImageFile=wizard_logo.png
+WizardSmallImageFile=wizard_logo_small.png
 
 UninstallDisplayIcon={app}\PortalPanelLauncher.exe
 
