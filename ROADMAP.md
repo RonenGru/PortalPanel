@@ -110,6 +110,6 @@ This document tracks the development goals and progress for PortalPanel, a live 
 - [x] GPL-3.0 license
 - [x] PyInstaller build (two-exe: launcher + server)
 - [x] GitHub repository (RonenGru/PortalPanel)
-- [x] v1.0 release with downloadable zip
-- [ ] Inno Setup installer (.exe)
+- [x] v1.1 release (portable zip + installer)
+- [x] Inno Setup installer (.exe)
 - [ ] CI/CD automated builds (optional, future)

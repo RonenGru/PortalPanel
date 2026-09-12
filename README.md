@@ -29,15 +29,17 @@ MSFS's built-in "Pop Out" feature stops working when VR is enabled. PortalPanel 
 
 ## Installing the Windows App
 
-**Prebuilt release** — grab the latest build from the [Releases](../../releases) page and extract it to a folder (for example `C:\PortalPanel`). Then run:
+Two options — both from the [Releases](../../releases) page:
+
+**Option 1: Installer (recommended)** — download `PortalPanel-Setup-v1.1.exe` and double-click. Installs per-user (no admin needed), creates Desktop + Start Menu shortcuts, and adds an uninstaller. Requires WebView2 (preinstalled on Windows 10 21H2+ / Windows 11).
+
+**Option 2: Portable zip** — download `PortalPanel-v1.1-win64.zip`, extract to a folder (for example `C:\PortalPanel`), then run:
 
 ```
 PortalPanelLauncher.exe
 ```
 
 The launcher starts the backend server, opens the instrument window, and shows a monitor picker so you can choose which screen the panel appears on. Your settings are saved automatically in `%LOCALAPPDATA%\PortalPanel\`.
-
-> A packaged Windows installer (Inno Setup) is in progress and will be linked here once ready.
 
 ## Usage
 
